@@ -15,7 +15,9 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 
+# Default: large-v3 for best quality (Metal preferred)
 MODEL_SIZE=${WHISPER_MODEL_SIZE:-large-v3}
+export MODEL_SIZE
 
 if ! command -v ffmpeg >/dev/null 2>&1; then
   echo "ffmpeg not found; attempting to install..." >&2
@@ -28,16 +30,6 @@ if ! command -v ffmpeg >/dev/null 2>&1; then
   fi
 fi
 
-python - <<'PY'
-from pathlib import Path
-from faster_whisper.utils import download_model
-
-models_dir = Path(__file__).parent / "models"
-models_dir.mkdir(exist_ok=True)
-model_size = "${MODEL_SIZE}"
-print(f"Downloading Whisper model '{model_size}' to {models_dir} ...")
-download_model(model_size, models_dir)
-print("Model download complete.")
-PY
+python download_model.py --model-size "${MODEL_SIZE}"
 
 echo "Installation finished."

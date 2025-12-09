@@ -17,41 +17,78 @@ class WhisperEngine:
         model_dir: Optional[Path] = None,
         device_preference: Optional[str] = None,
     ) -> None:
+        # Default: large-v3 for best accuracy (Metal preferred)
         self.model_size = model_size or os.getenv("WHISPER_MODEL_SIZE", "large-v3")
-        self.model_dir = model_dir or Path(__file__).resolve().parent / "models"
+        env_model_dir = os.getenv("WHISPER_MODELS_DIR")
+        resolved_dir = Path(env_model_dir) if env_model_dir else Path(__file__).resolve().parent / "models"
+        self.model_dir = model_dir or resolved_dir
         self.device_preference = device_preference or os.getenv("WHISPER_DEVICE", "metal")
+        self.strict_device = self._parse_bool(os.getenv("WHISPER_STRICT_DEVICE", "1"))
         self.compute_type = self._resolve_compute_type()
         self.model = self._load_model()
 
     def _load_model(self) -> WhisperModel:
+        available = self._available_models()
         preferred_path = self.model_dir / self.model_size
         if preferred_path.exists():
             model_path = preferred_path
-        elif self.model_dir.exists():
-            model_path = self.model_dir
         else:
+            available_str = ", ".join(available) if available else "none"
             raise FileNotFoundError(
-                f"Model path {preferred_path} not found. Run install.sh to download models."
+                f"Model '{self.model_size}' not found in {self.model_dir}. "
+                f"Available models: {available_str}. Run install.sh to download."
             )
 
-        devices_to_try = [self.device_preference, "cpu"]
+        devices_to_try = [self.device_preference]
+        if not self.strict_device:
+            devices_to_try.append("cpu")
         last_exc: Optional[Exception] = None
         for device in devices_to_try:
             if device is None:
                 continue
-            try:
-                logger.info("Loading Whisper model from %s on device %s", model_path, device)
-                model = WhisperModel(
-                    str(model_path),
-                    device=device,
-                    compute_type=self.compute_type,
-                )
-                return model
-            except Exception as exc:  # pragma: no cover - best effort fallback
-                last_exc = exc
-                logger.warning("Failed loading on %s: %s", device, exc)
-                continue
+            compute_options = [self.compute_type]
+            if "int8_float16" not in compute_options:
+                compute_options.append("int8_float16")
+            if "int8" not in compute_options:
+                compute_options.append("int8")
+
+            for ctype in compute_options:
+                try:
+                    logger.info(
+                        "Loading Whisper model from %s on device %s with compute_type=%s",
+                        model_path,
+                        device,
+                        ctype,
+                    )
+                    model = WhisperModel(
+                        str(model_path),
+                        device=device,
+                        compute_type=ctype,
+                    )
+                    # Save the actual configuration that worked.
+                    self.compute_type = ctype
+                    self.device_preference = device
+                    return model
+                except Exception as exc:  # pragma: no cover - best effort fallback
+                    last_exc = exc
+                    logger.warning(
+                        "Failed loading on %s with compute_type=%s: %s", device, ctype, exc
+                    )
+                    continue
         raise RuntimeError(f"Unable to load Whisper model: {last_exc}")
+
+    @staticmethod
+    def _parse_bool(value: str) -> bool:
+        return value.lower() in {"1", "true", "yes", "on"}
+
+    def _available_models(self) -> List[str]:
+        if not self.model_dir.exists():
+            return []
+        names: List[str] = []
+        for item in self.model_dir.iterdir():
+            if item.is_dir():
+                names.append(item.name)
+        return sorted(names)
 
     def _resolve_compute_type(self) -> str:
         override = os.getenv("WHISPER_COMPUTE_TYPE")
