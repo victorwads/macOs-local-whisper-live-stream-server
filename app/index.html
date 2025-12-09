@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Whisper Live Transcription</title>
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; margin: 24px; background: #f6f6fb; color: #222; }
+    h1 { margin-bottom: 12px; }
+    button { margin-right: 8px; padding: 10px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; }
+    #startBtn { background: #4f46e5; color: white; }
+    #stopBtn { background: #e11d48; color: white; }
+    textarea { width: 100%; height: 200px; padding: 12px; box-sizing: border-box; margin-top: 12px; border-radius: 8px; border: 1px solid #d0d0d8; font-size: 15px; }
+    #status { margin-top: 12px; font-size: 14px; color: #555; }
+  </style>
+</head>
+<body>
+  <h1>Live Whisper Transcription</h1>
+  <div>
+    <button id="startBtn">Start Mic</button>
+    <button id="stopBtn">Stop</button>
+  </div>
+  <div id="status">Idle.</div>
+  <textarea id="transcript" placeholder="Partial transcription will appear here..."></textarea>
+
+  <script src="script.js"></script>
+</body>
+</html>
