@@ -29,7 +29,22 @@ let mediaStream;
 let sourceNode;
 let isStreaming = false;
 let pendingStartAudio = false;
-let currentModel = null;
+let currentModel = localStorage.getItem('whisper:model') || null;
+const savedThreshold = localStorage.getItem('whisper:threshold');
+const savedWindow = localStorage.getItem('whisper:window');
+const savedInterval = localStorage.getItem('whisper:interval');
+if (savedThreshold) {
+  silenceThreshold = parseFloat(savedThreshold);
+  if (thresholdInput) thresholdInput.value = silenceThreshold;
+}
+if (savedWindow) {
+  windowSeconds = parseFloat(savedWindow);
+  if (windowInput) windowInput.value = windowSeconds;
+}
+if (savedInterval) {
+  intervalSeconds = parseFloat(savedInterval);
+  if (intervalInput) intervalInput.value = intervalSeconds;
+}
 
 function setStatus(text) {
   statusEl.textContent = text;
@@ -49,6 +64,7 @@ function updateModelSelect({ supported, installed, current, def }) {
     if (m === currentModel) opt.selected = true;
     modelSelect.appendChild(opt);
   });
+  localStorage.setItem('whisper:model', currentModel);
   modelStatus.textContent = `Selected model: ${currentModel}`;
 }
 
@@ -243,6 +259,7 @@ thresholdInput?.addEventListener('input', () => {
   const val = parseFloat(thresholdInput.value);
   if (!Number.isNaN(val) && val >= 0) {
     silenceThreshold = val;
+    localStorage.setItem('whisper:threshold', silenceThreshold.toString());
   }
 });
 
@@ -250,6 +267,7 @@ windowInput?.addEventListener('input', () => {
   const val = parseFloat(windowInput.value);
   if (!Number.isNaN(val) && val >= 0.5) {
     windowSeconds = val;
+    localStorage.setItem('whisper:window', windowSeconds.toString());
   }
 });
 
@@ -257,12 +275,14 @@ intervalInput?.addEventListener('input', () => {
   const val = parseFloat(intervalInput.value);
   if (!Number.isNaN(val) && val >= 0.2) {
     intervalSeconds = val;
+    localStorage.setItem('whisper:interval', intervalSeconds.toString());
   }
 });
 
 modelSelect?.addEventListener('change', () => {
   currentModel = modelSelect.value;
   modelStatus.textContent = `Selected model: ${currentModel}`;
+  localStorage.setItem('whisper:model', currentModel);
   sendControl({ type: 'select_model', model: currentModel });
   setStatus(`Switching to model ${currentModel}`);
 });
