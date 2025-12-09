@@ -5,12 +5,12 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from whisper_engine import WhisperEngine
 from ws import router as ws_router
+from engine_manager import available_models, get_engine, DEFAULT_MODEL
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -27,15 +27,12 @@ app.add_middleware(
 
 app.include_router(ws_router)
 
-engine: Optional[WhisperEngine] = None
-
 
 @app.on_event("startup")
 async def load_model() -> None:
-    global engine
-    if engine is None:
-        engine = WhisperEngine()
-        logger.info("Whisper model loaded and ready.")
+    # Warm up default model
+    get_engine(DEFAULT_MODEL)
+    logger.info("Whisper model loaded and ready.")
 
 
 @app.get("/health")
@@ -43,11 +40,17 @@ async def health() -> dict:
     return {"status": "ok"}
 
 
+@app.get("/models")
+async def list_models() -> dict:
+    return {"models": available_models(), "default": DEFAULT_MODEL}
+
+
 @app.post("/transcribe")
-async def transcribe(file: UploadFile = File(...)) -> JSONResponse:
-    if engine is None:
-        await load_model()
-    assert engine is not None
+async def transcribe(
+    file: UploadFile = File(...),
+    model: Optional[str] = Form(None),
+) -> JSONResponse:
+    engine = get_engine(model)
 
     if not file.filename:
         raise HTTPException(status_code=400, detail="Missing filename")

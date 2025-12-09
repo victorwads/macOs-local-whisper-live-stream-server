@@ -23,12 +23,12 @@ class WhisperEngine:
         resolved_dir = Path(env_model_dir) if env_model_dir else Path(__file__).resolve().parent / "models"
         self.model_dir = model_dir or resolved_dir
         self.device_preference = device_preference or os.getenv("WHISPER_DEVICE", "metal")
-        self.strict_device = self._parse_bool(os.getenv("WHISPER_STRICT_DEVICE", "1"))
+        self.strict_device = self._parse_bool(os.getenv("WHISPER_STRICT_DEVICE", "0"))
         self.compute_type = self._resolve_compute_type()
         self.model = self._load_model()
 
     def _load_model(self) -> WhisperModel:
-        available = self._available_models()
+        available = self.available_models()
         preferred_path = self.model_dir / self.model_size
         if preferred_path.exists():
             model_path = preferred_path
@@ -39,7 +39,11 @@ class WhisperEngine:
                 f"Available models: {available_str}. Run install.sh to download."
             )
 
-        devices_to_try = [self.device_preference]
+        devices_to_try = []
+        if self.device_preference:
+            devices_to_try.append(self.device_preference)
+            if self.device_preference == "metal":
+                devices_to_try.append("auto")  # let ctranslate2 decide best available
         if not self.strict_device:
             devices_to_try.append("cpu")
         last_exc: Optional[Exception] = None
@@ -81,11 +85,14 @@ class WhisperEngine:
     def _parse_bool(value: str) -> bool:
         return value.lower() in {"1", "true", "yes", "on"}
 
-    def _available_models(self) -> List[str]:
-        if not self.model_dir.exists():
+    @staticmethod
+    def available_models() -> List[str]:
+        env_model_dir = os.getenv("WHISPER_MODELS_DIR")
+        model_dir = Path(env_model_dir) if env_model_dir else Path(__file__).resolve().parent / "models"
+        if not model_dir.exists():
             return []
         names: List[str] = []
-        for item in self.model_dir.iterdir():
+        for item in model_dir.iterdir():
             if item.is_dir():
                 names.append(item.name)
         return sorted(names)
@@ -130,4 +137,11 @@ class WhisperEngine:
         if audio.ndim != 1:
             audio = np.mean(audio, axis=1)
         audio = audio.astype(np.float32)
-        return self._run_transcription(audio, language)
+        # Skip inference on effectively silent buffers to avoid backend errors.
+        if audio.size == 0 or float(np.max(np.abs(audio))) < 1e-5:
+            return {"text": "", "segments": [], "language": language}
+        try:
+            return self._run_transcription(audio, language)
+        except Exception as exc:  # pragma: no cover - runtime safeguard
+            logger.warning("Streaming transcription failed: %s", exc)
+            return {"text": "", "segments": [], "language": language}

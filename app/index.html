@@ -20,6 +20,22 @@
     <button id="startBtn">Start Mic</button>
     <button id="stopBtn">Stop</button>
   </div>
+  <div style="margin-top:12px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+    <label for="modelSelect">Model</label>
+    <select id="modelSelect" style="min-width:180px;"></select>
+    <label for="thresholdInput">Silence threshold</label>
+    <input id="thresholdInput" type="number" step="0.0001" min="0" value="0.0015" style="width:100px;">
+    <label for="windowInput">Window (s)</label>
+    <input id="windowInput" type="number" step="0.1" min="0.5" value="4" style="width:70px;">
+    <label for="intervalInput">Interval (s)</label>
+    <input id="intervalInput" type="number" step="0.1" min="0.2" value="0.5" style="width:70px;">
+    <span id="levelIndicator">Level: --</span>
+    <span id="stateIndicator">State: idle</span>
+    <span id="suggestedIndicator">Suggested: --</span>
+  </div>
+  <div style="margin-top:12px; display:flex; align-items:center; gap:8px;">
+    <span id="modelStatus"></span>
+  </div>
   <div id="status">Idle.</div>
   <textarea id="transcript" placeholder="Partial transcription will appear here..."></textarea>
 

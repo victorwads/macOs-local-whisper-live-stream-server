@@ -16,7 +16,12 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 
 # Default: large-v3 for best quality (Metal preferred)
-MODEL_SIZE=${WHISPER_MODEL_SIZE:-large-v3}
+MODEL_SIZE=${WHISPER_MODEL_SIZE:-${MODEL_SIZE:-large-v3}}
+
+# Optional interactive selection (arrow keys) when INTERACTIVE=1 and TTY is present.
+if [ "${INTERACTIVE:-0}" = "1" ] && [ -t 0 ] && [ -t 1 ]; then
+  MODEL_SIZE=$(python choose_model.py --default "$MODEL_SIZE")
+fi
 export MODEL_SIZE
 
 if ! command -v ffmpeg >/dev/null 2>&1; then
