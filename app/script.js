@@ -19,6 +19,8 @@ let windowSeconds = parseFloat(windowInput?.value || '4');
 let intervalSeconds = parseFloat(intervalInput?.value || '0.5');
 let levelHistory = [];
 let cumulativeText = '';
+let modelsSupported = [];
+let modelsInstalled = new Set();
 
 let ws;
 let audioCtx;
@@ -26,35 +28,28 @@ let processor;
 let mediaStream;
 let sourceNode;
 let isStreaming = false;
+let pendingStartAudio = false;
 let currentModel = null;
 
 function setStatus(text) {
   statusEl.textContent = text;
 }
 
-async function loadModels() {
-  try {
-    modelStatus.textContent = 'Loading models...';
-    const resp = await fetch('http://localhost:8000/models');
-    const data = await resp.json();
-    const supported = data.supported || [];
-    const installed = new Set(data.installed || []);
-    const models = supported.length ? supported : Array.from(installed);
-    currentModel = data.default || models[0] || 'large-v3';
-    modelSelect.innerHTML = '';
-    models.forEach((m) => {
-      const opt = document.createElement('option');
-      opt.value = m;
-      opt.textContent = `${m}${installed.has(m) ? ' (installed)' : ''}`;
-      if (m === currentModel) opt.selected = true;
-      modelSelect.appendChild(opt);
-    });
-    modelStatus.textContent = `Default model: ${currentModel}`;
-  } catch (err) {
-    console.error('Failed to load models', err);
-    modelStatus.textContent = 'Failed to load models; using default.';
-    if (!currentModel) currentModel = 'large-v3';
-  }
+function updateModelSelect({ supported, installed, current, def }) {
+  modelsSupported = supported || modelsSupported;
+  modelsInstalled = new Set(installed || []);
+  const models = modelsSupported.length ? modelsSupported : Array.from(modelsInstalled);
+  if (!models.length) return;
+  currentModel = current || currentModel || def || models[0];
+  modelSelect.innerHTML = '';
+  models.forEach((m) => {
+    const opt = document.createElement('option');
+    opt.value = m;
+    opt.textContent = `${m}${modelsInstalled.has(m) ? ' (installed)' : ''}`;
+    if (m === currentModel) opt.selected = true;
+    modelSelect.appendChild(opt);
+  });
+  modelStatus.textContent = `Selected model: ${currentModel}`;
 }
 
 function downsampleBuffer(buffer, sampleRate, outSampleRate) {
@@ -121,57 +116,12 @@ function closeConnections() {
     audioCtx.close();
     audioCtx = null;
   }
-  if (ws) {
-    ws.close();
-    ws = null;
-  }
   isStreaming = false;
   stateIndicator.textContent = 'State: idle';
 }
 
-async function startStreaming() {
-  if (ws && ws.readyState === WebSocket.OPEN) return;
-  isStreaming = true;
-
-  const params = new URLSearchParams({
-    model: currentModel || '',
-    window: windowSeconds.toString(),
-    interval: intervalSeconds.toString(),
-    min_seconds: Math.min(0.5, windowSeconds).toString(),
-  });
-  const url = `${WS_URL}?${params.toString()}`;
-  ws = new WebSocket(url);
-  ws.binaryType = 'arraybuffer';
-
-  ws.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data);
-      if (data.partial) {
-        transcriptEl.value = data.partial;
-      }
-      if (data.final !== undefined) {
-        cumulativeText = data.final || cumulativeText;
-        if (finalEl) finalEl.value = cumulativeText;
-      }
-      if (data.status) {
-        setStatus(data.status);
-      }
-      if (data.error) {
-        setStatus(`Server error: ${data.error}`);
-      }
-    } catch (err) {
-      console.error('Bad message', err);
-    }
-  };
-
-  ws.onclose = () => setStatus('WebSocket closed');
-  ws.onopen = () => setStatus(`Streaming with model ${currentModel}`);
-
-  await new Promise((resolve, reject) => {
-    ws.onopen = () => resolve();
-    ws.onerror = (err) => reject(err);
-  });
-
+async function startAudioCapture() {
+  if (isStreaming) return;
   mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
   audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: TARGET_RATE });
   sourceNode = audioCtx.createMediaStreamSource(mediaStream);
@@ -194,7 +144,84 @@ async function startStreaming() {
 
   sourceNode.connect(processor);
   processor.connect(audioCtx.destination);
-  setStatus('Streaming audio...');
+  isStreaming = true;
+  setStatus(`Streaming audio with model ${currentModel}`);
+}
+
+function sendControl(payload) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(payload));
+  }
+}
+
+async function connectWebSocket(startMic = false) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    if (startMic) await startAudioCapture();
+    return;
+  }
+  pendingStartAudio = startMic;
+  ws = new WebSocket(WS_URL);
+  ws.binaryType = 'arraybuffer';
+
+  ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.type === 'models') {
+        updateModelSelect({
+          supported: data.supported,
+          installed: data.installed,
+          current: data.current,
+          def: data.default,
+        });
+      }
+      if (data.partial) {
+        transcriptEl.value = data.partial;
+      }
+      if (data.final !== undefined) {
+        cumulativeText = data.final || cumulativeText;
+        if (finalEl) finalEl.value = cumulativeText;
+      }
+      if (data.status) {
+        setStatus(data.status);
+      }
+      if (data.error) {
+        setStatus(`Server error: ${data.error}`);
+      }
+    } catch (err) {
+      console.error('Bad message', err);
+    }
+  };
+
+  ws.onclose = () => setStatus('WebSocket closed');
+  const onOpen = () => {
+    setStatus('Connected to backend');
+    sendControl({
+      type: 'set_params',
+      window: windowSeconds,
+      interval: intervalSeconds,
+      min_seconds: Math.min(0.5, windowSeconds),
+    });
+    sendControl({ type: 'select_model', model: currentModel || 'large-v3' });
+    sendControl({ type: 'request_models' });
+  };
+  const openPromise = new Promise((resolve, reject) => {
+    ws.addEventListener('open', () => {
+      onOpen();
+      resolve();
+    }, { once: true });
+    ws.addEventListener('error', (err) => reject(err), { once: true });
+  });
+
+  await openPromise;
+
+  if (pendingStartAudio) {
+    await startAudioCapture();
+    pendingStartAudio = false;
+  }
+}
+
+async function startStreaming() {
+  await connectWebSocket(true);
 }
 
 function stopStreaming() {
@@ -236,18 +263,14 @@ intervalInput?.addEventListener('input', () => {
 modelSelect?.addEventListener('change', () => {
   currentModel = modelSelect.value;
   modelStatus.textContent = `Selected model: ${currentModel}`;
-  if (isStreaming) {
-    stopStreaming();
-    startStreaming().catch((err) => {
-      console.error(err);
-      setStatus('Error restarting with new model: ' + err.message);
-    });
-  }
+  sendControl({ type: 'select_model', model: currentModel });
+  setStatus(`Switching to model ${currentModel}`);
 });
 
 window.addEventListener('beforeunload', stopStreaming);
 
-// Initialize model list and set defaults
-loadModels().then(() => {
-  setStatus('Ready. Select model and press Start.');
+// Open WebSocket immediately to get status/model info; audio starts on Start button.
+connectWebSocket(false).catch((err) => {
+  console.error(err);
+  setStatus('Failed to connect to backend: ' + err.message);
 });

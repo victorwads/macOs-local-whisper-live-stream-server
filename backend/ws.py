@@ -7,7 +7,7 @@ from typing import Optional
 import numpy as np
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from engine_manager import DEFAULT_MODEL, ensure_engine
+from engine_manager import DEFAULT_MODEL, ensure_engine, installed_models, supported_models
 from download_model import fetch_model
 
 router = APIRouter()
@@ -29,8 +29,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     backlog_processed = False
     engine_local: Optional = None
     cumulative_text = ""
+    current_model = DEFAULT_MODEL
     query_params = websocket.query_params
-    model_name = query_params.get("model") or DEFAULT_MODEL
     try:
         window_seconds = float(query_params.get("window", DEFAULT_WINDOW_SECONDS))
     except ValueError:
@@ -57,7 +57,20 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     min_samples_for_infer = int(min_seconds * SAMPLE_RATE)
     energy_history = deque(maxlen=ENERGY_HISTORY)
 
-    async def load_engine() -> Optional:
+    async def send_models_message():
+        await websocket.send_text(
+            json.dumps(
+                {
+                    "type": "models",
+                    "supported": supported_models(),
+                    "installed": installed_models(),
+                    "default": DEFAULT_MODEL,
+                    "current": current_model,
+                }
+            )
+        )
+
+    async def load_engine(model_name: str) -> Optional:
         try:
             await websocket.send_text(json.dumps({"status": f"loading model {model_name}"}))
             eng = ensure_engine(model_name, download=False)
@@ -79,10 +92,58 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             await websocket.send_text(json.dumps({"error": f"model load failed: {exc}"}))
             return None
 
-    engine_task = asyncio.create_task(load_engine())
+    await send_models_message()
+    engine_task = asyncio.create_task(load_engine(current_model))
     try:
         while True:
             message = await websocket.receive()
+            # Handle control messages
+            if "text" in message and message["text"]:
+                try:
+                    control = json.loads(message["text"])
+                except json.JSONDecodeError:
+                    continue
+                ctype = control.get("type")
+                if ctype == "select_model":
+                    new_model = control.get("model") or current_model
+                    if new_model != current_model:
+                        current_model = new_model
+                        buffer = np.zeros(0, dtype=np.float32)
+                        backlog_processed = False
+                        cumulative_text = ""
+                        last_infer = 0.0
+                        engine_local = None
+                        engine_task = asyncio.create_task(load_engine(current_model))
+                        await websocket.send_text(json.dumps({"status": f"switching to {current_model}"}))
+                elif ctype == "set_params":
+                    try:
+                        window_seconds = float(control.get("window", window_seconds))
+                        interval = float(control.get("interval", infer_interval))
+                        min_seconds = float(control.get("min_seconds", min_seconds))
+                        voice_factor = float(control.get("voice_factor", voice_factor))
+                        window_seconds = max(0.5, min(window_seconds, MAX_SECONDS))
+                        infer_interval = max(0.2, min(interval, 2.0))
+                        min_seconds = max(0.1, min(min_seconds, window_seconds))
+                        voice_factor = max(0.05, min(voice_factor, 0.9))
+                        window_samples = int(window_seconds * SAMPLE_RATE)
+                        min_samples_for_infer = int(min_seconds * SAMPLE_RATE)
+                        await websocket.send_text(
+                            json.dumps(
+                                {
+                                    "status": "params updated",
+                                    "window_seconds": window_seconds,
+                                    "interval": infer_interval,
+                                    "min_seconds": min_seconds,
+                                    "voice_factor": voice_factor,
+                                }
+                            )
+                        )
+                    except Exception:
+                        pass
+                elif ctype == "request_models":
+                    await send_models_message()
+                continue
+
             if "bytes" not in message:
                 continue
             data = message["bytes"] or b""
@@ -170,7 +231,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         "rms": chunk_rms,
                         "threshold": dyn_threshold,
                     }
-                )
+                    )
                 await websocket.send_text(payload)
     except WebSocketDisconnect:
         return
