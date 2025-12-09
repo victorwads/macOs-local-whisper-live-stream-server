@@ -25,6 +25,17 @@ SUPPORTED = {
 }
 
 
+def fetch_model(model_size: str, models_dir: str | None = None) -> Path:
+    if model_size not in SUPPORTED:
+        available = ", ".join(sorted(SUPPORTED))
+        raise ValueError(f"Invalid model '{model_size}'. Choose one of: {available}")
+    base_dir = Path(models_dir) if models_dir else Path(__file__).resolve().parent / "models"
+    target_dir = base_dir / model_size
+    target_dir.mkdir(parents=True, exist_ok=True)
+    download_model(model_size, target_dir)
+    return target_dir
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Download a faster-whisper model.")
     parser.add_argument(

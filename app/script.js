@@ -35,13 +35,15 @@ async function loadModels() {
     modelStatus.textContent = 'Loading models...';
     const resp = await fetch('http://localhost:8000/models');
     const data = await resp.json();
-    const models = data.models || [];
+    const supported = data.supported || [];
+    const installed = new Set(data.installed || []);
+    const models = supported.length ? supported : Array.from(installed);
     currentModel = data.default || models[0] || 'large-v3';
     modelSelect.innerHTML = '';
     models.forEach((m) => {
       const opt = document.createElement('option');
       opt.value = m;
-      opt.textContent = m;
+      opt.textContent = `${m}${installed.has(m) ? ' (installed)' : ''}`;
       if (m === currentModel) opt.selected = true;
       modelSelect.appendChild(opt);
     });

@@ -7,7 +7,8 @@ from typing import Optional
 import numpy as np
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from engine_manager import DEFAULT_MODEL, get_engine
+from engine_manager import DEFAULT_MODEL, ensure_engine
+from download_model import fetch_model
 
 router = APIRouter()
 
@@ -56,8 +57,20 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     # Notify frontend about model load attempts
     try:
         await websocket.send_text(json.dumps({"status": f"loading model {model_name}"}))
-        engine_local = get_engine(model_name)
+        engine_local = ensure_engine(model_name, download=False)
         await websocket.send_text(json.dumps({"status": f"model loaded {engine_local.model_size}"}))
+    except FileNotFoundError:
+        await websocket.send_text(json.dumps({"status": f"downloading model {model_name}"}))
+        loop = asyncio.get_event_loop()
+        try:
+            await loop.run_in_executor(None, fetch_model, model_name)
+            await websocket.send_text(json.dumps({"status": f"download complete {model_name}"}))
+            engine_local = ensure_engine(model_name, download=False)
+            await websocket.send_text(json.dumps({"status": f"model loaded {engine_local.model_size}"}))
+        except Exception as exc:
+            await websocket.send_text(json.dumps({"error": f"model load failed: {exc}"}))
+            await websocket.close(code=1011)
+            return
     except Exception as exc:
         await websocket.send_text(json.dumps({"error": f"model load failed: {exc}"}))
         await websocket.close(code=1011)

@@ -10,7 +10,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from ws import router as ws_router
-from engine_manager import available_models, get_engine, DEFAULT_MODEL
+from engine_manager import (
+    DEFAULT_MODEL,
+    available_models,
+    ensure_engine,
+    installed_models,
+    supported_models,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -31,7 +37,7 @@ app.include_router(ws_router)
 @app.on_event("startup")
 async def load_model() -> None:
     # Warm up default model
-    get_engine(DEFAULT_MODEL)
+    ensure_engine(DEFAULT_MODEL, download=False)
     logger.info("Whisper model loaded and ready.")
 
 
@@ -42,7 +48,11 @@ async def health() -> dict:
 
 @app.get("/models")
 async def list_models() -> dict:
-    return {"models": available_models(), "default": DEFAULT_MODEL}
+    return {
+        "installed": installed_models(),
+        "supported": supported_models(),
+        "default": DEFAULT_MODEL,
+    }
 
 
 @app.post("/transcribe")
@@ -50,7 +60,7 @@ async def transcribe(
     file: UploadFile = File(...),
     model: Optional[str] = Form(None),
 ) -> JSONResponse:
-    engine = get_engine(model)
+    engine = ensure_engine(model, download=False)
 
     if not file.filename:
         raise HTTPException(status_code=400, detail="Missing filename")
