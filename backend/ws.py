@@ -26,6 +26,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     await websocket.accept()
     buffer = np.zeros(0, dtype=np.float32)
     last_infer = 0.0
+    backlog_processed = False
+    engine_local: Optional = None
+    cumulative_text = ""
     query_params = websocket.query_params
     model_name = query_params.get("model") or DEFAULT_MODEL
     try:
@@ -54,27 +57,29 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     min_samples_for_infer = int(min_seconds * SAMPLE_RATE)
     energy_history = deque(maxlen=ENERGY_HISTORY)
 
-    # Notify frontend about model load attempts
-    try:
-        await websocket.send_text(json.dumps({"status": f"loading model {model_name}"}))
-        engine_local = ensure_engine(model_name, download=False)
-        await websocket.send_text(json.dumps({"status": f"model loaded {engine_local.model_size}"}))
-    except FileNotFoundError:
-        await websocket.send_text(json.dumps({"status": f"downloading model {model_name}"}))
-        loop = asyncio.get_event_loop()
+    async def load_engine() -> Optional:
         try:
-            await loop.run_in_executor(None, fetch_model, model_name)
-            await websocket.send_text(json.dumps({"status": f"download complete {model_name}"}))
-            engine_local = ensure_engine(model_name, download=False)
-            await websocket.send_text(json.dumps({"status": f"model loaded {engine_local.model_size}"}))
+            await websocket.send_text(json.dumps({"status": f"loading model {model_name}"}))
+            eng = ensure_engine(model_name, download=False)
+            await websocket.send_text(json.dumps({"status": f"model loaded {eng.model_size}"}))
+            return eng
+        except FileNotFoundError:
+            await websocket.send_text(json.dumps({"status": f"downloading model {model_name}"}))
+            loop = asyncio.get_event_loop()
+            try:
+                await loop.run_in_executor(None, fetch_model, model_name)
+                await websocket.send_text(json.dumps({"status": f"download complete {model_name}"}))
+                eng = ensure_engine(model_name, download=False)
+                await websocket.send_text(json.dumps({"status": f"model loaded {eng.model_size}"}))
+                return eng
+            except Exception as exc:
+                await websocket.send_text(json.dumps({"error": f"model load failed: {exc}"}))
+                return None
         except Exception as exc:
             await websocket.send_text(json.dumps({"error": f"model load failed: {exc}"}))
-            await websocket.close(code=1011)
-            return
-    except Exception as exc:
-        await websocket.send_text(json.dumps({"error": f"model load failed: {exc}"}))
-        await websocket.close(code=1011)
-        return
+            return None
+
+    engine_task = asyncio.create_task(load_engine())
     try:
         while True:
             message = await websocket.receive()
@@ -99,11 +104,42 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             if buffer.size > MAX_SAMPLES:
                 buffer = buffer[-MAX_SAMPLES:]
 
+            # If engine finished loading, capture it
+            if engine_local is None and engine_task.done():
+                engine_local = engine_task.result()
+                if engine_local is None:
+                    await websocket.close(code=1011)
+                    return
+
+            # Process backlog once after engine ready
+            if engine_local and not backlog_processed and buffer.size >= min_samples_for_infer:
+                backlog_processed = True
+                loop = asyncio.get_event_loop()
+                try:
+                    result = await loop.run_in_executor(
+                        None, engine_local.transcribe_array, np.copy(buffer), None
+                    )
+                    text = result.get("text", "")
+                    if text:
+                        cumulative_text = text
+                        await websocket.send_text(
+                            json.dumps(
+                                {
+                                    "partial": text,
+                                    "final": cumulative_text,
+                                    "status": "backlog processed",
+                                }
+                            )
+                        )
+                except Exception as exc:
+                    await websocket.send_text(json.dumps({"error": str(exc)}))
+
             now = time.time()
             if (
                 buffer.size >= min_samples_for_infer
                 and (now - last_infer) >= infer_interval
                 and voice_active
+                and engine_local
             ):
                 last_infer = now
                 # Use the most recent window to keep latency low.
@@ -117,9 +153,17 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     await websocket.send_text(json.dumps({"error": str(exc)}))
                     continue
                 partial_text = result.get("text", "")
+                if partial_text:
+                    if cumulative_text and partial_text.startswith(cumulative_text):
+                        cumulative_text = partial_text
+                    elif cumulative_text in partial_text:
+                        cumulative_text = partial_text
+                    else:
+                        cumulative_text = (cumulative_text + " " + partial_text).strip()
                 payload = json.dumps(
                     {
                         "partial": partial_text,
+                        "final": cumulative_text,
                         "window_seconds": window_seconds,
                         "interval": infer_interval,
                         "min_seconds": min_seconds,

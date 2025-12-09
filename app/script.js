@@ -1,6 +1,7 @@
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const transcriptEl = document.getElementById('transcript');
+const finalEl = document.getElementById('finalTranscript');
 const statusEl = document.getElementById('status');
 const thresholdInput = document.getElementById('thresholdInput');
 const levelIndicator = document.getElementById('levelIndicator');
@@ -17,6 +18,7 @@ let silenceThreshold = parseFloat(thresholdInput?.value || '0.0015');
 let windowSeconds = parseFloat(windowInput?.value || '4');
 let intervalSeconds = parseFloat(intervalInput?.value || '0.5');
 let levelHistory = [];
+let cumulativeText = '';
 
 let ws;
 let audioCtx;
@@ -146,6 +148,10 @@ async function startStreaming() {
       const data = JSON.parse(event.data);
       if (data.partial) {
         transcriptEl.value = data.partial;
+      }
+      if (data.final !== undefined) {
+        cumulativeText = data.final || cumulativeText;
+        if (finalEl) finalEl.value = cumulativeText;
       }
       if (data.status) {
         setStatus(data.status);
