@@ -25,6 +25,8 @@ class WhisperEngine:
         self.device_preference = device_preference or os.getenv("WHISPER_DEVICE", "metal")
         self.strict_device = self._parse_bool(os.getenv("WHISPER_STRICT_DEVICE", "0"))
         self.compute_type = self._resolve_compute_type()
+        self.active_device: str = ""
+        self.active_compute_type: str = ""
         self.model = self._load_model()
 
     def _load_model(self) -> WhisperModel:
@@ -72,6 +74,8 @@ class WhisperEngine:
                     # Save the actual configuration that worked.
                     self.compute_type = ctype
                     self.device_preference = device
+                    self.active_device = device
+                    self.active_compute_type = ctype
                     return model
                 except Exception as exc:  # pragma: no cover - best effort fallback
                     last_exc = exc
@@ -96,6 +100,13 @@ class WhisperEngine:
             if item.is_dir():
                 names.append(item.name)
         return sorted(names)
+
+    def info(self) -> Dict[str, str]:
+        return {
+            "model": self.model_size,
+            "device": self.active_device or self.device_preference,
+            "compute_type": self.active_compute_type or self.compute_type,
+        }
 
     def _resolve_compute_type(self) -> str:
         override = os.getenv("WHISPER_COMPUTE_TYPE")

@@ -56,6 +56,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     window_samples = int(window_seconds * SAMPLE_RATE)
     min_samples_for_infer = int(min_seconds * SAMPLE_RATE)
     energy_history = deque(maxlen=ENERGY_HISTORY)
+    last_debug = 0.0
 
     async def send_models_message():
         await websocket.send_text(
@@ -74,7 +75,17 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         try:
             await websocket.send_text(json.dumps({"status": f"loading model {model_name}"}))
             eng = ensure_engine(model_name, download=False)
-            await websocket.send_text(json.dumps({"status": f"model loaded {eng.model_size}"}))
+            info = eng.info()
+            await websocket.send_text(
+                json.dumps(
+                    {
+                        "status": f"model loaded {info['model']}",
+                        "device": info.get("device"),
+                        "compute_type": info.get("compute_type"),
+                        "type": "model_info",
+                    }
+                )
+            )
             return eng
         except FileNotFoundError:
             await websocket.send_text(json.dumps({"status": f"downloading model {model_name}"}))
@@ -83,7 +94,17 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 await loop.run_in_executor(None, fetch_model, model_name)
                 await websocket.send_text(json.dumps({"status": f"download complete {model_name}"}))
                 eng = ensure_engine(model_name, download=False)
-                await websocket.send_text(json.dumps({"status": f"model loaded {eng.model_size}"}))
+                info = eng.info()
+                await websocket.send_text(
+                    json.dumps(
+                        {
+                            "status": f"model loaded {info['model']}",
+                            "device": info.get("device"),
+                            "compute_type": info.get("compute_type"),
+                            "type": "model_info",
+                        }
+                    )
+                )
                 return eng
             except Exception as exc:
                 await websocket.send_text(json.dumps({"error": f"model load failed: {exc}"}))
@@ -165,6 +186,19 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             if buffer.size > MAX_SAMPLES:
                 buffer = buffer[-MAX_SAMPLES:]
 
+            now = time.time()
+            if engine_local is None and (now - last_debug) > 1.0:
+                last_debug = now
+                await websocket.send_text(
+                    json.dumps(
+                        {
+                            "status": f"accumulating {buffer.size / SAMPLE_RATE:.2f}s waiting model",
+                            "buffer_seconds": buffer.size / SAMPLE_RATE,
+                            "type": "debug",
+                        }
+                    )
+                )
+
             # If engine finished loading, capture it
             if engine_local is None and engine_task.done():
                 engine_local = engine_task.result()
@@ -177,8 +211,24 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 backlog_processed = True
                 loop = asyncio.get_event_loop()
                 try:
+                    await websocket.send_text(
+                        json.dumps(
+                            {
+                                "status": f"processing backlog {buffer.size / SAMPLE_RATE:.2f}s",
+                                "type": "debug",
+                            }
+                        )
+                    )
                     result = await loop.run_in_executor(
                         None, engine_local.transcribe_array, np.copy(buffer), None
+                    )
+                    await websocket.send_text(
+                        json.dumps(
+                            {
+                                "status": f"backlog processed {buffer.size / SAMPLE_RATE:.2f}s",
+                                "type": "debug",
+                            }
+                        )
                     )
                     text = result.get("text", "")
                     if text:
@@ -207,6 +257,14 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 audio_copy = np.copy(buffer[-window_samples:])
                 loop = asyncio.get_event_loop()
                 try:
+                    await websocket.send_text(
+                        json.dumps(
+                            {
+                                "status": f"processing window {window_seconds:.2f}s",
+                                "type": "debug",
+                            }
+                        )
+                    )
                     result = await loop.run_in_executor(
                         None, engine_local.transcribe_array, audio_copy, None
                     )

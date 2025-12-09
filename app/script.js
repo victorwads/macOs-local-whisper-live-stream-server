@@ -11,6 +11,7 @@ const modelStatus = document.getElementById('modelStatus');
 const windowInput = document.getElementById('windowInput');
 const intervalInput = document.getElementById('intervalInput');
 const suggestedIndicator = document.getElementById('suggestedIndicator');
+const logEl = document.getElementById('log');
 
 const WS_URL = 'ws://localhost:8000/stream';
 const TARGET_RATE = 16000;
@@ -21,6 +22,7 @@ let levelHistory = [];
 let cumulativeText = '';
 let modelsSupported = [];
 let modelsInstalled = new Set();
+let logHistory = [];
 
 let ws;
 let audioCtx;
@@ -48,6 +50,7 @@ if (savedInterval) {
 
 function setStatus(text) {
   statusEl.textContent = text;
+  addLog(text);
 }
 
 function updateModelSelect({ supported, installed, current, def }) {
@@ -111,6 +114,16 @@ function updateIndicators(level, isSilent) {
   const suggested = minL + (maxL - minL) * 0.2;
   if (suggestedIndicator && Number.isFinite(suggested)) {
     suggestedIndicator.textContent = `Suggested: ${suggested.toFixed(5)}`;
+  }
+}
+
+function addLog(message) {
+  const ts = new Date().toLocaleTimeString();
+  logHistory.push(`[${ts}] ${message}`);
+  if (logHistory.length > 50) logHistory.shift();
+  if (logEl) {
+    logEl.textContent = logHistory.slice(-15).join('\n');
+    logEl.scrollTop = logEl.scrollHeight;
   }
 }
 
@@ -199,6 +212,13 @@ async function connectWebSocket(startMic = false) {
       }
       if (data.status) {
         setStatus(data.status);
+      }
+      if (data.type === 'model_info') {
+        const info = `${data.status} (device=${data.device}, compute=${data.compute_type})`;
+        addLog(info);
+      }
+      if (data.type === 'debug') {
+        addLog(data.status || 'debug');
       }
       if (data.error) {
         setStatus(`Server error: ${data.error}`);
