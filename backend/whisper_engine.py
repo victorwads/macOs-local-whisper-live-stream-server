@@ -99,6 +99,8 @@ class WhisperEngine:
         for item in model_dir.iterdir():
             if item.is_dir():
                 names.append(item.name)
+            elif item.is_file() and item.name.startswith("ggml-") and item.suffix in {".bin", ".gguf"}:
+                names.append(item.name)
         return sorted(names)
 
     def info(self) -> Dict[str, str]:
