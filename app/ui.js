@@ -47,12 +47,20 @@ export class UIManager {
   }
 
   initInputs() {
+    this.updateInputs();
+  }
+
+  updateInputs() {
     if (this.dom.thresholdInput) this.dom.thresholdInput.value = this.config.get('threshold');
     if (this.dom.minSilenceInput) this.dom.minSilenceInput.value = this.config.get('minSilence');
     if (this.dom.minSpeakInput) this.dom.minSpeakInput.value = this.config.get('minSpeak');
     if (this.dom.minSecondsInput) this.dom.minSecondsInput.value = this.config.get('minSeconds');
     if (this.dom.languageInput) this.dom.languageInput.value = this.config.get('language');
     if (this.dom.partialIntervalInput) this.dom.partialIntervalInput.value = this.config.get('partialInterval');
+    // Also update model select if needed, though usually it triggers the change
+    if (this.dom.modelSelect && this.dom.modelSelect.value !== this.config.get('model')) {
+        this.dom.modelSelect.value = this.config.get('model');
+    }
   }
 
   bindEvents() {

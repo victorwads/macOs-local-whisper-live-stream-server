@@ -38,11 +38,24 @@ class App {
     this.ui.subscribe('stop', () => this.stopStreaming());
     this.ui.subscribe('configChange', ({ key, value }) => {
       this.config.set(key, value);
-      this.audioState.updateConfig(key, value);
-      this.segmenter.updateConfig(key, value);
       
-      // Send params to backend if needed
-      if (['window', 'interval', 'language', 'partialInterval'].includes(key)) {
+      if (key === 'model') {
+        // Model changed. ConfigManager has already reloaded values for new model.
+        // We need to refresh everything.
+        
+        // 1. Update AudioState and Segmenter with NEW values
+        const newThreshold = this.config.get('threshold');
+        const newMinSilence = this.config.get('minSilence');
+        const newMinSpeak = this.config.get('minSpeak');
+        
+        this.audioState.updateConfig('threshold', newThreshold);
+        this.audioState.updateConfig('minSilence', newMinSilence);
+        this.audioState.updateConfig('minSpeak', newMinSpeak);
+        
+        this.segmenter.updateConfig('minSilence', newMinSilence);
+        this.segmenter.updateConfig('minSpeak', newMinSpeak);
+        
+        // 2. Send new params to backend
         this.ws.sendControl({
           type: 'set_params',
           window: this.config.get('window'),
@@ -51,9 +64,27 @@ class App {
           language: this.config.get('language'),
           partial_interval: this.config.get('partialInterval'),
         });
-      }
-      if (key === 'model') {
+        
+        // 3. Send select_model
         this.ws.sendControl({ type: 'select_model', model: value });
+        
+        // 4. Update UI inputs (because they might have old values)
+        this.ui.updateInputs(); 
+      } else {
+        this.audioState.updateConfig(key, value);
+        this.segmenter.updateConfig(key, value);
+        
+        // Send params to backend if needed
+        if (['window', 'interval', 'language', 'partialInterval'].includes(key)) {
+          this.ws.sendControl({
+            type: 'set_params',
+            window: this.config.get('window'),
+            interval: this.config.get('interval'),
+            min_seconds: Math.min(0.5, this.config.get('window')),
+            language: this.config.get('language'),
+            partial_interval: this.config.get('partialInterval'),
+          });
+        }
       }
     });
 
