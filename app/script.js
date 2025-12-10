@@ -1,4 +1,4 @@
-import { state, saveThreshold, saveWindow, saveInterval, saveModel, pushLevel } from './state.js';
+import { state, saveThreshold, saveWindow, saveInterval, saveModel, saveMinSilence, saveMinSpeak, pushLevel } from './state.js';
 import { dom, initInputs, setStatus, updateModelSelect, updateIndicators, setPartial, setFinalsUI, bindInputListeners, addLog, addAudioLog, updateAudioStats } from './ui.js';
 import { WSClient } from './wsClient.js';
 import { AudioStateManager } from './audioState.js';
@@ -219,9 +219,11 @@ function bindUI() {
       wsClient.sendControl({ type: 'select_model', model });
     },
     (val) => {
+      saveMinSilence(val);
       if (audioStateManager) audioStateManager.updateConfig('minSilence', val);
     },
     (val) => {
+      saveMinSpeak(val);
       if (audioStateManager) audioStateManager.updateConfig('minSpeak', val);
     }
   );
@@ -233,8 +235,8 @@ function init() {
   // Initialize Audio State Manager
   audioStateManager = new AudioStateManager({
     threshold: state.threshold,
-    minSilence: 1000, // Default, will be updated from UI if needed
-    minSpeak: 200
+    minSilence: state.minSilence,
+    minSpeak: state.minSpeak
   });
 
   // Subscribe to events

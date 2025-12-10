@@ -27,6 +27,8 @@ let logHistory = [];
 
 export function initInputs() {
   if (dom.thresholdInput) dom.thresholdInput.value = state.threshold;
+  if (dom.minSilenceInput) dom.minSilenceInput.value = state.minSilence;
+  if (dom.minSpeakInput) dom.minSpeakInput.value = state.minSpeak;
   if (dom.windowInput) dom.windowInput.value = state.window;
   if (dom.intervalInput) dom.intervalInput.value = state.interval;
 }
