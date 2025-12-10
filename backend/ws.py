@@ -32,8 +32,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     last_infer = 0.0
     backlog_processed = False
     engine_local: Optional = None
-    cumulative_text = ""
-    last_final_sent = ""
+    pending_text = ""
+    confirmed_text = ""
+    final_history: list[str] = []
+    last_ids = []
     chunk_meta = deque()  # (id, start, end)
     current_model = DEFAULT_MODEL
     query_params = websocket.query_params
@@ -125,8 +127,30 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             await websocket.send_text(json.dumps({"error": f"model load failed: {exc}"}))
             return None
 
+    async def emit_final(status: Optional[str] = None) -> None:
+        nonlocal pending_text, final_history, last_ids, confirmed_text
+        final_block = pending_text.strip()
+        if not final_block:
+            return
+        if confirmed_text and final_block.startswith(confirmed_text):
+            final_block = final_block[len(confirmed_text) :].strip()
+        if not final_block:
+            return
+        confirmed_text = (confirmed_text + " " + final_block).strip()
+        final_history.append(final_block)
+        payload = {
+            "type": "final",
+            "final": final_block,
+            "history": final_history,
+            "processed_ids": last_ids,
+        }
+        if status:
+            payload["status"] = status
+        await websocket.send_text(json.dumps(payload))
+        pending_text = ""
+
     async def process_audio_chunk(chunk: np.ndarray, chunk_id: Optional[str] = None) -> None:
-        nonlocal buffer, chunk_meta, energy_history, backlog_processed, cumulative_text, last_final_sent, last_infer, last_debug, engine_local, engine_task
+        nonlocal buffer, chunk_meta, energy_history, backlog_processed, pending_text, last_infer, last_debug, engine_local, engine_task, last_ids
         if chunk.size == 0:
             return
         chunk_rms = float(np.sqrt(np.mean(np.square(chunk))))
@@ -200,25 +224,14 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         }
                     )
                 )
-                text = result.get("text", "")
+                text = (result.get("text") or "").strip()
                 if text:
-                    cumulative_text = text
+                    pending_text = text
                     ids = [mid for (mid, s, e) in chunk_meta]
+                    last_ids = ids
                     await websocket.send_text(
                         json.dumps({"type": "partial", "partial": text, "processed_ids": ids})
                     )
-                    if cumulative_text != last_final_sent:
-                        last_final_sent = cumulative_text
-                        await websocket.send_text(
-                            json.dumps(
-                                {
-                                    "type": "final",
-                                    "final": cumulative_text,
-                                    "processed_ids": ids,
-                                    "status": "backlog processed",
-                                }
-                            )
-                        )
             except Exception as exc:
                 logger.error("Backlog processing failed: %s", exc, exc_info=True)
                 await websocket.send_text(json.dumps({"error": str(exc)}))
@@ -233,6 +246,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             last_infer = now
             audio_copy = np.copy(buffer[-window_samples:])
             loop = asyncio.get_event_loop()
+            partial_text = ""
             try:
                 await websocket.send_text(
                     json.dumps(
@@ -245,23 +259,19 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 result = await loop.run_in_executor(
                     None, engine_local.transcribe_array, audio_copy, None
                 )
+                partial_text = (result.get("text") or "").strip()
             except Exception as exc:
                 logger.error("Window processing failed: %s", exc, exc_info=True)
                 await websocket.send_text(json.dumps({"error": str(exc)}))
                 return
-            partial_text = result.get("text", "")
             if partial_text:
-                if cumulative_text and partial_text.startswith(cumulative_text):
-                    cumulative_text = partial_text
-                elif cumulative_text in partial_text:
-                    cumulative_text = partial_text
-                else:
-                    cumulative_text = (cumulative_text + " " + partial_text).strip()
+                pending_text = partial_text
                 ids = []
                 if chunk_meta:
                     window_start = max(buffer.size - window_samples, 0)
                     window_end = buffer.size
                     ids = [mid for (mid, s, e) in chunk_meta if e > window_start and s < window_end]
+                last_ids = ids
                 await websocket.send_text(
                     json.dumps(
                         {
@@ -276,11 +286,6 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         }
                     )
                 )
-                if cumulative_text and cumulative_text != last_final_sent:
-                    last_final_sent = cumulative_text
-                    await websocket.send_text(
-                        json.dumps({"type": "final", "final": cumulative_text, "processed_ids": ids})
-                    )
 
     await send_models_message()
     engine_task = asyncio.create_task(load_engine(current_model))
@@ -318,21 +323,26 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     await process_audio_chunk(audio_bytes, cid)
                     continue
                 elif ctype == "silence":
+                    await emit_final(status="silence detected")
                     buffer = np.zeros(0, dtype=np.float32)
                     chunk_meta.clear()
                     backlog_processed = False
                     last_infer = 0.0
-                    cumulative_text = ""
-                    last_final_sent = ""
+                    pending_text = ""
+                    last_ids = []
                     continue
                 if ctype == "select_model":
                     new_model = control.get("model") or current_model
                     if new_model != current_model:
+                        await emit_final(status="model switch")
                         current_model = new_model
                         buffer = np.zeros(0, dtype=np.float32)
                         backlog_processed = False
-                        cumulative_text = ""
                         last_infer = 0.0
+                        pending_text = ""
+                        final_history = []
+                        confirmed_text = ""
+                        last_ids = []
                         engine_local = None
                         chunk_meta.clear()
                         engine_task = asyncio.create_task(load_engine(current_model))

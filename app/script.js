@@ -69,6 +69,7 @@ async function startAudioCapture() {
     const isSilent = level < state.threshold;
     updateIndicators(level, isSilent);
     pushLevel(level);
+    console.log('Audio level:', level.toFixed(5), isSilent ? '(silent)' : '(sending)');
     if (isSilent) {
       if (!silenceActive && wsClient?.ws && wsClient.ws.readyState === WebSocket.OPEN) {
         wsClient.ws.send(JSON.stringify({ type: 'silence' }));
