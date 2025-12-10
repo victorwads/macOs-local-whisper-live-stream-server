@@ -20,7 +20,8 @@ class WhisperEngine:
         # Default: large-v3 for best accuracy (Metal preferred)
         self.model_size = model_size or os.getenv("WHISPER_MODEL_SIZE", "large-v3")
         env_model_dir = os.getenv("WHISPER_MODELS_DIR")
-        resolved_dir = Path(env_model_dir) if env_model_dir else Path(__file__).resolve().parent / "models"
+        base_dir = Path(env_model_dir) if env_model_dir else Path(__file__).resolve().parent / "models"
+        resolved_dir = base_dir / "faster"
         self.model_dir = model_dir or resolved_dir
         self.device_preference = device_preference or os.getenv("WHISPER_DEVICE", "metal")
         self.strict_device = self._parse_bool(os.getenv("WHISPER_STRICT_DEVICE", "0"))
@@ -92,7 +93,8 @@ class WhisperEngine:
     @staticmethod
     def available_models() -> List[str]:
         env_model_dir = os.getenv("WHISPER_MODELS_DIR")
-        model_dir = Path(env_model_dir) if env_model_dir else Path(__file__).resolve().parent / "models"
+        base_dir = Path(env_model_dir) if env_model_dir else Path(__file__).resolve().parent / "models"
+        model_dir = base_dir / "faster"
         if not model_dir.exists():
             return []
         names: List[str] = []

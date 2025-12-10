@@ -1,7 +1,27 @@
 import os
+import ssl
+import subprocess
 from pathlib import Path
+from urllib import request, error
 
 CPP_BASE_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main"
+
+
+def _download_with_urllib(url: str, target: Path, skip_verify: bool = True) -> None:
+    ctx = None
+    if skip_verify:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+    with request.urlopen(url, context=ctx) as resp, open(target, "wb") as f:
+        f.write(resp.read())
+
+
+def _download_with_curl(url: str, target: Path, skip_verify: bool = True) -> None:
+    cmd = ["curl", "-L", url, "-o", str(target)]
+    if skip_verify:
+        cmd.insert(1, "-k")
+    subprocess.run(cmd, check=True)
 
 
 def download_cpp_model(model_size: str, models_root: str | None = None) -> Path:
@@ -11,9 +31,16 @@ def download_cpp_model(model_size: str, models_root: str | None = None) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.exists():
         return target
-    import urllib.request
 
     url = f"{CPP_BASE_URL}/ggml-{model_size}.bin"
     print(f"Downloading ggml model for whisper.cpp: {model_size} -> {target}")
-    urllib.request.urlretrieve(url, target)
+    # Default: allow download even if cert validation fails; set WHISPER_CPP_INSECURE=0 to enforce.
+    skip_verify = os.getenv("WHISPER_CPP_INSECURE", "1") != "0"
+    try:
+        _download_with_urllib(url, target, skip_verify=skip_verify)
+    except Exception as first_err:
+        try:
+            _download_with_curl(url, target, skip_verify=skip_verify)
+        except Exception as curl_err:
+            raise RuntimeError(f"Failed to download model {model_size}: {first_err} / {curl_err}") from curl_err
     return target

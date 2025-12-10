@@ -1,5 +1,6 @@
 import os
 from functools import lru_cache
+from pathlib import Path
 from typing import List, Optional, Union
 
 from download_model import SUPPORTED, fetch_model
