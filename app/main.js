@@ -97,6 +97,8 @@ class App {
         window: this.config.get('window'),
         interval: this.config.get('interval'),
         min_seconds: Math.min(0.5, this.config.get('window')),
+        language: this.config.get('language'),
+        partial_interval: this.config.get('partialInterval'),
       });
       this.ws.sendControl({ type: 'select_model', model: this.config.get('model') });
       this.ws.sendControl({ type: 'request_models' });
@@ -108,6 +110,9 @@ class App {
     this.ws.subscribe('message', (data) => {
       if (data.type === 'models') {
         this.ui.updateModelSelect(data);
+      }
+      if (data.type === 'language_update') {
+        this.ui.updateLoadedLanguage(data.language);
       }
       if (data.type === 'partial') {
         this.ui.setPartial(data.text);

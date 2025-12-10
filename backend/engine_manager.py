@@ -15,6 +15,10 @@ BACKEND = os.getenv("WHISPER_BACKEND", "cpp").lower()  # cpp or faster
 
 def _make_engine(model_size: str):
     if BACKEND == "cpp":
+        # Ensure model exists before creating wrapper
+        # This allows ensure_engine to fail if model is missing, triggering download in ws.py
+        server_manager._resolve_model(model_size)
+
         # server-backed client: keep model loaded
         class ServerWrapper:
             def __init__(self, name: str):

@@ -12,6 +12,7 @@ export class UIManager {
       minSpeakInput: document.getElementById('minSpeakInput'),
       minSecondsInput: document.getElementById('minSecondsInput'),
       languageInput: document.getElementById('languageInput'),
+      loadedLang: document.getElementById('loadedLang'),
       partialIntervalInput: document.getElementById('partialIntervalInput'),
       levelIndicator: document.getElementById('levelIndicator'),
       stateIndicator: document.getElementById('stateIndicator'),
@@ -84,6 +85,12 @@ export class UIManager {
   emit(event, data) {
     if (this.listeners[event]) {
       this.listeners[event].forEach(cb => cb(data));
+    }
+  }
+
+  updateLoadedLanguage(lang) {
+    if (this.dom.loadedLang) {
+      this.dom.loadedLang.textContent = `[${lang}]`;
     }
   }
 

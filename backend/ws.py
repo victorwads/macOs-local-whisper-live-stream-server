@@ -22,6 +22,56 @@ MAX_SECONDS = 10
 MAX_SAMPLES = MAX_SECONDS * SAMPLE_RATE
 DEFAULT_MIN_SECONDS = 2.0
 
+IGNORED_TEXTS = {
+    "Thank you.",
+    "[BLANK_AUDIO]",
+    "Thanks for watching!",
+    "MBC News",
+    "You",
+}
+
+CODE_TO_NAME = {
+    "en": "English", "zh": "Chinese", "de": "German", "es": "Spanish", "ru": "Russian", 
+    "ko": "Korean", "fr": "French", "ja": "Japanese", "pt": "Portuguese", "tr": "Turkish", 
+    "pl": "Polish", "ca": "Catalan", "nl": "Dutch", "ar": "Arabic", "sv": "Swedish", 
+    "it": "Italian", "id": "Indonesian", "hi": "Hindi", "fi": "Finnish", "vi": "Vietnamese", 
+    "he": "Hebrew", "uk": "Ukrainian", "el": "Greek", "ms": "Malay", "th": "Thai", 
+    "da": "Danish", "cs": "Czech", "ro": "Romanian", "hu": "Hungarian", "ta": "Tamil", 
+    "no": "Norwegian", "sk": "Slovak", "hr": "Croatian", "bg": "Bulgarian", "ur": "Urdu", 
+    "lt": "Lithuanian", "sl": "Slovenian", "lv": "Latvian", "et": "Estonian", "af": "Afrikaans", 
+    "gl": "Galician", "mr": "Marathi", "is": "Icelandic", "sw": "Swahili", "mk": "Macedonian", 
+    "cy": "Welsh", "sr": "Serbian", "ne": "Nepali", "az": "Azerbaijani", "fa": "Persian", 
+    "bs": "Bosnian", "kk": "Kazakh", "sq": "Albanian", "am": "Amharic", "hy": "Armenian", 
+    "km": "Khmer", "lo": "Lao", "my": "Burmese", "mn": "Mongolian", "sn": "Shona", 
+    "yo": "Yoruba", "so": "Somali", "zu": "Zulu", "kn": "Kannada", "ml": "Malayalam", 
+    "te": "Telugu", "si": "Sinhala", "tk": "Turkmen", "lb": "Luxembourgish", "ps": "Pashto", 
+    "gu": "Gujarati", "pa": "Punjabi", "eo": "Esperanto", "tl": "Tagalog", "bn": "Bengali", 
+    "eu": "Basque", "oc": "Occitan", "la": "Latin", "qu": "Quechua", "sa": "Sanskrit", 
+    "yi": "Yiddish", "haw": "Hawaiian", "jw": "Javanese", "sd": "Sindhi", "ku": "Kurdish", 
+    "tg": "Tajik", "tt": "Tatar", "cr": "Cree", "bo": "Tibetan",
+}
+
+def normalize_language(lang: str) -> str:
+    if not lang:
+        return None
+    lang = lang.strip()
+    if lang.lower() == "auto":
+        return None
+        
+    # Check if it's a full name match
+    clean_lang = lang.lower()
+    for name in CODE_TO_NAME.values():
+        if name.lower() == clean_lang:
+            return name
+            
+    # Extract code (first 2 chars or split by hyphen)
+    code = clean_lang.split("-")[0]
+    
+    if code in CODE_TO_NAME:
+        return CODE_TO_NAME[code]
+        
+    return None
+
 @router.websocket("/stream")
 async def websocket_endpoint(websocket: WebSocket) -> None:
     await websocket.accept()
@@ -144,9 +194,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             text = (result.get("text") or "").strip()
             
             # Filter out common hallucination
-            if text == "Thank you.":
-                text = ""
-            if text == "[BLANK_AUDIO]":
+            if text in IGNORED_TEXTS:
                 text = ""
                 
             if text:
@@ -208,13 +256,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             )
             process_time = time.time() - start_time
             audio_duration = audio_copy.size / SAMPLE_RATE
-            
-            # Check if segment is still valid (no flush happened)
-            if my_segment_id != current_segment_id:
-                return
-                
             text = (result.get("text") or "").strip()
             
+            if text in IGNORED_TEXTS:
+                text = ""
+
             if text:
                 last_processed_size = current_size
                 await websocket.send_text(json.dumps({
@@ -290,7 +336,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                                 segmenter.min_seconds = float(control["min_seconds"])
                                 min_seconds = segmenter.min_seconds
                             if "language" in control:
-                                current_language = control["language"]
+                                current_language = normalize_language(control["language"])
+                                await websocket.send_text(json.dumps({
+                                    "type": "language_update",
+                                    "language": current_language or "Auto"
+                                }))
                             if "partial_interval" in control:
                                 partial_interval_ms = float(control["partial_interval"])
 
