@@ -41,8 +41,7 @@ def installed_models() -> List[str]:
 
 
 def supported_models() -> List[str]:
-    extras = [f"ggml-{m}.bin" for m in SUPPORTED]
-    return list(SUPPORTED) + extras
+    return list(SUPPORTED)
 
 
 def available_models() -> List[str]:

@@ -2,6 +2,7 @@ import asyncio
 import json
 import time
 import os
+import logging
 from collections import deque
 from typing import Optional
 
@@ -13,6 +14,7 @@ from download_model import fetch_model
 from cpp_model import download_cpp_model
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 SAMPLE_RATE = 16000
 MAX_SECONDS = 10
@@ -112,9 +114,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 )
                 return eng
             except Exception as exc:
+                logger.error("Model load failed (download): %s", exc, exc_info=True)
                 await websocket.send_text(json.dumps({"error": f"model load failed: {exc}"}))
                 return None
         except Exception as exc:
+            logger.error("Model load failed: %s", exc, exc_info=True)
             await websocket.send_text(json.dumps({"error": f"model load failed: {exc}"}))
             return None
 
@@ -122,7 +126,17 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     engine_task = asyncio.create_task(load_engine(current_model))
     try:
         while True:
-            message = await websocket.receive()
+            try:
+                message = await websocket.receive()
+            except WebSocketDisconnect:
+                break
+            except RuntimeError as exc:
+                logger.error("Runtime error on websocket receive: %s", exc, exc_info=True)
+                try:
+                    await websocket.send_text(json.dumps({"error": str(exc)}))
+                except Exception:
+                    pass
+                break
             # Handle control messages
             if "text" in message and message["text"]:
                 try:
@@ -208,8 +222,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             if engine_local is None and engine_task.done():
                 engine_local = engine_task.result()
                 if engine_local is None:
-                    await websocket.close(code=1011)
-                    return
+                    logger.error("Model not loaded; engine_task returned None")
+                    await websocket.send_text(json.dumps({"error": "model not loaded; check logs"}))
+                    # stay connected so client can retry/select another model
+                    engine_task = asyncio.create_task(load_engine(current_model))
+                    continue
 
             # Process backlog once after engine ready
             if engine_local and not backlog_processed and buffer.size >= min_samples_for_infer:
@@ -248,6 +265,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                             )
                         )
                 except Exception as exc:
+                    logger.error("Backlog processing failed: %s", exc, exc_info=True)
                     await websocket.send_text(json.dumps({"error": str(exc)}))
 
             now = time.time()
@@ -274,6 +292,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         None, engine_local.transcribe_array, audio_copy, None
                     )
                 except Exception as exc:  # pragma: no cover - safeguard
+                    logger.error("Window processing failed: %s", exc, exc_info=True)
                     await websocket.send_text(json.dumps({"error": str(exc)}))
                     continue
                 partial_text = result.get("text", "")
@@ -297,7 +316,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     )
                 await websocket.send_text(payload)
     except WebSocketDisconnect:
-        return
+        pass
     except Exception as exc:  # pragma: no cover - runtime protection
-        await websocket.send_text(json.dumps({"error": str(exc)}))
-        return
+        logger.error("Unhandled websocket exception: %s", exc, exc_info=True)
+        try:
+            await websocket.send_text(json.dumps({"error": str(exc)}))
+        except Exception:
+            pass

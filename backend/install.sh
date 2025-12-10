@@ -54,12 +54,16 @@ fi
 BIN_DIR="$WHISPER_CPP_DIR/bin"
 mkdir -p "$BIN_DIR"
 for candidate in \
+  "$WHISPER_CPP_DIR/bin/whisper-cli" \
   "$WHISPER_CPP_DIR/bin/main" \
+  "$WHISPER_CPP_DIR/whisper-cli" \
   "$WHISPER_CPP_DIR/main" \
+  "$WHISPER_CPP_DIR/build/bin/whisper-cli" \
   "$WHISPER_CPP_DIR/build/bin/main" \
+  "$WHISPER_CPP_DIR/build/bin/Release/whisper-cli" \
   "$WHISPER_CPP_DIR/build/bin/Release/main"; do
   if [ -x "$candidate" ]; then
-    cp "$candidate" "$BIN_DIR/main"
+    cp "$candidate" "$BIN_DIR/$(basename "$candidate")"
     break
   fi
 done

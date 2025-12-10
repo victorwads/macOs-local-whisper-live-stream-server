@@ -12,11 +12,11 @@ import soundfile as sf
 class WhisperCppEngine:
     """
     Minimal wrapper around whisper.cpp CLI using ggml/gguf models.
-    Requires whisper.cpp built with Metal (WHISPER_METAL=1 make main).
+    Requires whisper.cpp built with Metal (WHISPER_METAL=1 make).
     """
 
     def __init__(self, model_name: str, models_dir: Optional[Path] = None, cpp_dir: Optional[Path] = None):
-        self.model_name = model_name
+        self.model_name = self._normalize_name(model_name)
         self.models_dir = models_dir or Path(__file__).resolve().parent / "models" / "cpp"
         self.cpp_dir = cpp_dir or Path(__file__).resolve().parent / "whisper.cpp"
         self.binary = os.getenv("WHISPER_CPP_BIN") or self._resolve_binary()
@@ -24,24 +24,34 @@ class WhisperCppEngine:
         if not Path(self.binary).exists():
             raise FileNotFoundError(f"whisper.cpp binary not found at {self.binary}. Run install.sh.")
 
+    @staticmethod
+    def _normalize_name(name: str) -> str:
+        base = name
+        if base.startswith("ggml-"):
+            base = base[len("ggml-") :]
+        if base.endswith(".bin"):
+            base = base[: -len(".bin")]
+        return base
+
     def _resolve_binary(self) -> str:
         candidates = [
+            self.cpp_dir / "bin" / "whisper-cli",
             self.cpp_dir / "bin" / "main",
+            self.cpp_dir / "whisper-cli",
             self.cpp_dir / "main",
+            self.cpp_dir / "build" / "bin" / "whisper-cli",
             self.cpp_dir / "build" / "bin" / "main",
+            self.cpp_dir / "build" / "bin" / "Release" / "whisper-cli",
             self.cpp_dir / "build" / "bin" / "Release" / "main",
         ]
         for cand in candidates:
             if cand.exists():
                 return str(cand)
-        return str(self.cpp_dir / "bin" / "main")
+        return str(self.cpp_dir / "bin" / "whisper-cli")
 
     def _resolve_model_path(self) -> Path:
         names_to_try = []
-        if self.model_name.startswith("ggml-"):
-            names_to_try.append(self.model_name)
-        else:
-            names_to_try.append(f"ggml-{self.model_name}.bin")
+        names_to_try.append(f"ggml-{self.model_name}.bin")
         names_to_try.append(self.model_name)
         names_to_try.append(f"{self.model_name}.bin")
         for name in names_to_try:
@@ -49,6 +59,13 @@ class WhisperCppEngine:
             if candidate.exists():
                 return candidate
         raise FileNotFoundError(f"Model for whisper.cpp not found: {candidate}")
+
+    def info(self) -> Dict[str, str]:
+        return {
+            "model": self.model_name,
+            "device": "metal",
+            "compute_type": "cpp",
+        }
 
     def _run_cli(self, audio_path: Path) -> Dict:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -90,10 +107,10 @@ class WhisperCppEngine:
                     texts.append(text)
             return {"text": " ".join(texts).strip(), "segments": segments}
 
-    def transcribe_file(self, file_path: str) -> Dict:
+    def transcribe_file(self, file_path: str, language: Optional[str] = None) -> Dict:
         return self._run_cli(Path(file_path))
 
-    def transcribe_array(self, audio: np.ndarray) -> Dict:
+    def transcribe_array(self, audio: np.ndarray, language: Optional[str] = None) -> Dict:
         if audio.ndim != 1:
             audio = np.mean(audio, axis=1)
         audio = audio.astype(np.float32)

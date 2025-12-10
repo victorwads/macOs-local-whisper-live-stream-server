@@ -13,12 +13,16 @@ export WHISPER_DEVICE=${WHISPER_DEVICE:-metal}
 export WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-auto}
 export WHISPER_STRICT_DEVICE=${WHISPER_STRICT_DEVICE:-0}
 export WHISPER_BACKEND=${WHISPER_BACKEND:-cpp}
-# whisper.cpp default binary lives in ./bin/main after install; fallbacks for build paths
+# whisper.cpp default binary lives in ./bin/whisper-cli after install; fallbacks for build paths
 DEFAULT_CPP_BIN=""
 for path in \
+  "$(dirname "$0")/whisper.cpp/bin/whisper-cli" \
   "$(dirname "$0")/whisper.cpp/bin/main" \
+  "$(dirname "$0")/whisper.cpp/whisper-cli" \
   "$(dirname "$0")/whisper.cpp/main" \
+  "$(dirname "$0")/whisper.cpp/build/bin/whisper-cli" \
   "$(dirname "$0")/whisper.cpp/build/bin/main" \
+  "$(dirname "$0")/whisper.cpp/build/bin/Release/whisper-cli" \
   "$(dirname "$0")/whisper.cpp/build/bin/Release/main"; do
   if [ -x "$path" ]; then
     DEFAULT_CPP_BIN="$path"
