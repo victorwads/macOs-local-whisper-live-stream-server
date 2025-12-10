@@ -25,11 +25,11 @@ export class WSClient {
     }
   }
 
-  async connect() {
+  async connect(url = WS_URL) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
     
     this.manualClose = false;
-    this.ws = new WebSocket(WS_URL);
+    this.ws = new WebSocket(url);
     this.ws.binaryType = 'arraybuffer';
 
     this.ws.onopen = () => {

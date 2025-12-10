@@ -10,8 +10,7 @@ export class UIManager {
       thresholdInput: document.getElementById('thresholdInput'),
       minSilenceInput: document.getElementById('minSilenceInput'),
       minSpeakInput: document.getElementById('minSpeakInput'),
-      windowInput: document.getElementById('windowInput'),
-      intervalInput: document.getElementById('intervalInput'),
+      minSecondsInput: document.getElementById('minSecondsInput'),
       levelIndicator: document.getElementById('levelIndicator'),
       stateIndicator: document.getElementById('stateIndicator'),
       modelSelect: document.getElementById('modelSelect'),
@@ -41,8 +40,7 @@ export class UIManager {
     if (this.dom.thresholdInput) this.dom.thresholdInput.value = this.config.get('threshold');
     if (this.dom.minSilenceInput) this.dom.minSilenceInput.value = this.config.get('minSilence');
     if (this.dom.minSpeakInput) this.dom.minSpeakInput.value = this.config.get('minSpeak');
-    if (this.dom.windowInput) this.dom.windowInput.value = this.config.get('window');
-    if (this.dom.intervalInput) this.dom.intervalInput.value = this.config.get('interval');
+    if (this.dom.minSecondsInput) this.dom.minSecondsInput.value = this.config.get('minSeconds');
   }
 
   bindEvents() {
@@ -61,8 +59,7 @@ export class UIManager {
     bindInput(this.dom.thresholdInput, 'threshold');
     bindInput(this.dom.minSilenceInput, 'minSilence');
     bindInput(this.dom.minSpeakInput, 'minSpeak');
-    bindInput(this.dom.windowInput, 'window');
-    bindInput(this.dom.intervalInput, 'interval');
+    bindInput(this.dom.minSecondsInput, 'minSeconds');
 
     this.dom.modelSelect?.addEventListener('change', () => {
       this.emit('configChange', { key: 'model', value: this.dom.modelSelect.value });

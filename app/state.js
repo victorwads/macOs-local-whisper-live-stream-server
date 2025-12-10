@@ -1,10 +1,9 @@
 const DEFAULTS = {
   model: 'large-v3',
   threshold: 0.0015,
-  window: 4,
-  interval: 0.5,
   minSilence: 1000,
   minSpeak: 200,
+  minSeconds: 2.0,
 };
 
 function loadNumber(key, fallback) {
@@ -16,10 +15,9 @@ function loadNumber(key, fallback) {
 export const state = {
   model: localStorage.getItem('whisper:model') || DEFAULTS.model,
   threshold: loadNumber('whisper:threshold', DEFAULTS.threshold),
-  window: loadNumber('whisper:window', DEFAULTS.window),
-  interval: loadNumber('whisper:interval', DEFAULTS.interval),
   minSilence: loadNumber('whisper:minSilence', DEFAULTS.minSilence),
   minSpeak: loadNumber('whisper:minSpeak', DEFAULTS.minSpeak),
+  minSeconds: loadNumber('whisper:minSeconds', DEFAULTS.minSeconds),
   levelHistory: [],
   finals: [],
   supported: [],
@@ -46,14 +44,9 @@ export function saveMinSpeak(ms) {
   localStorage.setItem('whisper:minSpeak', ms.toString());
 }
 
-export function saveWindow(w) {
-  state.window = w;
-  localStorage.setItem('whisper:window', w.toString());
-}
-
-export function saveInterval(i) {
-  state.interval = i;
-  localStorage.setItem('whisper:interval', i.toString());
+export function saveMinSeconds(s) {
+  state.minSeconds = s;
+  localStorage.setItem('whisper:minSeconds', s.toString());
 }
 
 export function pushLevel(level) {

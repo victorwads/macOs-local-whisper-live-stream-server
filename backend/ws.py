@@ -21,10 +21,6 @@ SAMPLE_RATE = 16000
 MAX_SECONDS = 10
 MAX_SAMPLES = MAX_SECONDS * SAMPLE_RATE
 DEFAULT_MIN_SECONDS = 2.0
-DEFAULT_INFER_INTERVAL = 0.5
-DEFAULT_WINDOW_SECONDS = 4
-DEFAULT_VOICE_FACTOR = 0.2
-ENERGY_HISTORY = 50
 
 @router.websocket("/stream")
 async def websocket_endpoint(websocket: WebSocket) -> None:
@@ -128,6 +124,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 None, engine_local.transcribe_array, audio_segment, None
             )
             text = (result.get("text") or "").strip()
+            
+            # Filter out common hallucination
+            if text == "Thank you.":
+                text = ""
+                
             if text:
                 final_history.append(text)
                 await websocket.send_text(json.dumps({

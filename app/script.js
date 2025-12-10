@@ -1,4 +1,4 @@
-import { state, saveThreshold, saveWindow, saveInterval, saveModel, saveMinSilence, saveMinSpeak, pushLevel } from './state.js';
+import { state, saveThreshold, saveModel, saveMinSilence, saveMinSpeak, saveMinSeconds, pushLevel } from './state.js';
 import { dom, initInputs, setStatus, updateModelSelect, updateIndicators, setPartial, setFinalsUI, bindInputListeners, addLog, addAudioLog, updateAudioStats } from './ui.js';
 import { WSClient } from './wsClient.js';
 import { AudioStateManager } from './audioState.js';
@@ -135,9 +135,8 @@ async function startAudioCapture() {
       speechChunks.push(new Float32Array(downsampled));
       
       if (wsClient?.ws && wsClient.ws.readyState === WebSocket.OPEN) {
-        const view = new Float32Array(downsampled);
-        const b64 = float32ToBase64(view);
-        wsClient.ws.send(JSON.stringify({ type: 'chunk', id: chunkId++, audio: b64 }));
+        // Send raw binary
+        wsClient.ws.send(downsampled.buffer);
       }
     }
   };
@@ -197,22 +196,9 @@ function bindUI() {
       if (audioStateManager) audioStateManager.updateConfig('threshold', val);
     },
     (val) => {
-      saveWindow(val);
-      wsClient.sendControl({
-        type: 'set_params',
-        window: state.window,
-        interval: state.interval,
-        min_seconds: Math.min(0.5, state.window),
-      });
-    },
-    (val) => {
-      saveInterval(val);
-      wsClient.sendControl({
-        type: 'set_params',
-        window: state.window,
-        interval: state.interval,
-        min_seconds: Math.min(0.5, state.window),
-      });
+      saveMinSeconds(val);
+      // Reconnect or send param update if needed, but usually this is init param
+      // For now we can just save it, as it is used on connection start
     },
     (model) => {
       saveModel(model);
@@ -283,8 +269,14 @@ function init() {
 
   wsClient = new WSClient(startAudioCapture);
   bindUI();
+  
+  const params = new URLSearchParams({
+    min_seconds: state.minSeconds,
+  });
+  const url = `ws://localhost:8000/stream?${params.toString()}`;
+
   // Connect immediately for status/model info; audio starts on Start button
-  wsClient.connect(false).catch((err) => {
+  wsClient.connect(url).catch((err) => {
     console.error(err);
     setStatus('Failed to connect to backend: ' + err.message);
   });
