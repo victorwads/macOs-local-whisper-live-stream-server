@@ -13,5 +13,10 @@ export WHISPER_DEVICE=${WHISPER_DEVICE:-metal}
 export WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-auto}
 export WHISPER_STRICT_DEVICE=${WHISPER_STRICT_DEVICE:-0}
 export WHISPER_BACKEND=${WHISPER_BACKEND:-cpp}
-export WHISPER_CPP_BIN=${WHISPER_CPP_BIN:-$(dirname "$0")/whisper.cpp/main}
+# whisper.cpp default binary lives in ./bin/main after make; fall back to legacy ./main
+DEFAULT_CPP_BIN="$(dirname "$0")/whisper.cpp/bin/main"
+if [ ! -x "$DEFAULT_CPP_BIN" ]; then
+  DEFAULT_CPP_BIN="$(dirname "$0")/whisper.cpp/main"
+fi
+export WHISPER_CPP_BIN=${WHISPER_CPP_BIN:-$DEFAULT_CPP_BIN}
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload

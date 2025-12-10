@@ -36,23 +36,4 @@ if ! command -v ffmpeg >/dev/null 2>&1; then
   fi
 fi
 
-python download_model.py --model-size "${MODEL_SIZE}"
-
-# Build whisper.cpp with Metal for GPU usage
-if [ ! -d "$WHISPER_CPP_DIR" ]; then
-  git clone https://github.com/ggerganov/whisper.cpp.git "$WHISPER_CPP_DIR"
-fi
-pushd "$WHISPER_CPP_DIR" >/dev/null
-git pull --ff-only || true
-make clean >/dev/null 2>&1 || true
-WHISPER_METAL=1 make -j"$(sysctl -n hw.ncpu)" main
-popd >/dev/null
-
-# Download ggml model for whisper.cpp if missing
-CPP_MODEL_PATH="models/ggml-${MODEL_SIZE}.bin"
-if [ ! -f "$CPP_MODEL_PATH" ]; then
-  echo "Downloading ggml model for whisper.cpp: ${MODEL_SIZE}"
-  curl -L "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-${MODEL_SIZE}.bin" -o "$CPP_MODEL_PATH"
-fi
-
 echo "Installation finished."

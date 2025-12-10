@@ -17,7 +17,7 @@ class WhisperCppEngine:
 
     def __init__(self, model_name: str, models_dir: Optional[Path] = None, cpp_dir: Optional[Path] = None):
         self.model_name = model_name
-        self.models_dir = models_dir or Path(__file__).resolve().parent / "models"
+        self.models_dir = models_dir or Path(__file__).resolve().parent / "models" / "cpp"
         self.cpp_dir = cpp_dir or Path(__file__).resolve().parent / "whisper.cpp"
         self.binary = os.getenv("WHISPER_CPP_BIN") or str(self.cpp_dir / "main")
         self.model_path = self._resolve_model_path()
@@ -31,6 +31,7 @@ class WhisperCppEngine:
         else:
             names_to_try.append(f"ggml-{self.model_name}.bin")
         names_to_try.append(self.model_name)
+        names_to_try.append(f"{self.model_name}.bin")
         for name in names_to_try:
             candidate = self.models_dir / name
             if candidate.exists():

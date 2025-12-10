@@ -7,8 +7,9 @@ from typing import Optional
 import numpy as np
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from engine_manager import DEFAULT_MODEL, ensure_engine, installed_models, supported_models
+from engine_manager import DEFAULT_MODEL, ensure_engine, installed_models, supported_models, BACKEND
 from download_model import fetch_model
+from cpp_model import download_cpp_model
 
 router = APIRouter()
 
@@ -91,7 +92,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             await websocket.send_text(json.dumps({"status": f"downloading model {model_name}"}))
             loop = asyncio.get_event_loop()
             try:
-                await loop.run_in_executor(None, fetch_model, model_name)
+                if BACKEND == "cpp":
+                    await loop.run_in_executor(None, download_cpp_model, model_name, os.getenv("WHISPER_MODELS_DIR"))
+                else:
+                    await loop.run_in_executor(None, fetch_model, model_name, BACKEND)
                 await websocket.send_text(json.dumps({"status": f"download complete {model_name}"}))
                 eng = ensure_engine(model_name, download=False)
                 info = eng.info()

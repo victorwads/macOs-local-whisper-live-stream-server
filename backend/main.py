@@ -36,9 +36,11 @@ app.include_router(ws_router)
 
 @app.on_event("startup")
 async def load_model() -> None:
-    # Warm up default model
-    ensure_engine(DEFAULT_MODEL, download=False)
-    logger.info("Whisper model loaded and ready.")
+    try:
+        ensure_engine(DEFAULT_MODEL, download=False)
+        logger.info("Whisper model loaded and ready.")
+    except FileNotFoundError:
+        logger.info("Model %s not found at startup; will load on demand.", DEFAULT_MODEL)
 
 
 @app.get("/health")

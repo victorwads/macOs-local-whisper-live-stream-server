@@ -3,6 +3,7 @@ from functools import lru_cache
 from typing import List, Optional, Union
 
 from download_model import SUPPORTED, fetch_model
+from cpp_model import download_cpp_model
 from whisper_engine import WhisperEngine
 from whisper_cpp import WhisperCppEngine
 
@@ -23,10 +24,19 @@ def get_engine(model_size: Optional[str] = None):
 
 
 def installed_models() -> List[str]:
+    installed: List[str] = []
     try:
-        return WhisperEngine.available_models()
+        installed.extend(WhisperEngine.available_models())
     except Exception:
-        return []
+        pass
+    cpp_dir = Path(os.getenv("WHISPER_MODELS_DIR") or Path(__file__).resolve().parent / "models") / "cpp"
+    if cpp_dir.exists():
+        for item in cpp_dir.iterdir():
+            if item.is_file() and item.suffix == ".bin":
+                installed.append(item.name.replace("ggml-", "").replace(".bin", ""))
+            elif item.is_dir():
+                installed.append(item.name)
+    return sorted(set(installed))
 
 
 def supported_models() -> List[str]:
@@ -49,6 +59,9 @@ def ensure_engine(model_size: Optional[str] = None, download: bool = True):
     except FileNotFoundError:
         if not download:
             raise
-        fetch_model(size)
+        if BACKEND == "cpp":
+            download_cpp_model(size, models_root=os.getenv("WHISPER_MODELS_DIR"))
+        else:
+            fetch_model(size, backend="faster")
         get_engine.cache_clear()
         return get_engine(size)
