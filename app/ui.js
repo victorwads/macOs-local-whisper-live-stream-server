@@ -21,14 +21,13 @@ export class UIManager {
       suggestedIndicator: document.getElementById('suggestedIndicator'),
       statRms: document.getElementById('statRms'),
       statZcr: document.getElementById('statZcr'),
-      statSmoothedRms: document.getElementById('statSmoothedRms'),
-      statSmoothedZcr: document.getElementById('statSmoothedZcr'),
       statNoiseFloor: document.getElementById('statNoiseFloor'),
       statDynamicThreshold: document.getElementById('statDynamicThreshold'),
       statSpeechScore: document.getElementById('statSpeechScore'),
       statIsSpeech: document.getElementById('statIsSpeech'),
       statSmoothedSpeechScore: document.getElementById('statSmoothedSpeechScore'),
-      statPitchHz: document.getElementById('statPitchHz'),
+      statVoiceBandRatio: document.getElementById('statVoiceBandRatio'),
+      statTotalEnergy: document.getElementById('statTotalEnergy'),
       statIsSilent: document.getElementById('statIsSilent'),
       log: document.getElementById('log'),
       partialTranscript: document.getElementById('partialTranscript'),
@@ -150,14 +149,13 @@ export class UIManager {
     // Métricas de VAD
     if (this.dom.statRms) this.dom.statRms.textContent = stats.rms.toFixed(6);
     if (this.dom.statZcr) this.dom.statZcr.textContent = stats.zcr.toFixed(6);
-    if (this.dom.statSmoothedRms) this.dom.statSmoothedRms.textContent = (stats.smoothedRms ?? stats.rms).toFixed(6);
-    if (this.dom.statSmoothedZcr) this.dom.statSmoothedZcr.textContent = (stats.smoothedZcr ?? stats.zcr).toFixed(6);
     if (this.dom.statNoiseFloor) this.dom.statNoiseFloor.textContent = stats.noiseFloor.toFixed(6);
     if (this.dom.statDynamicThreshold) this.dom.statDynamicThreshold.textContent = stats.dynamicThreshold.toFixed(6);
     if (this.dom.statSpeechScore) this.dom.statSpeechScore.textContent = stats.speechScore.toFixed(3);
     if (this.dom.statSmoothedSpeechScore) this.dom.statSmoothedSpeechScore.textContent = (stats.smoothedSpeechScore ?? stats.speechScore).toFixed(3);
     if (this.dom.statIsSpeech) this.dom.statIsSpeech.textContent = stats.isSpeech ? 'yes' : 'no';
-    if (this.dom.statPitchHz) this.dom.statPitchHz.textContent = stats.pitchHz ? stats.pitchHz.toFixed(1) : '--';
+    if (this.dom.statVoiceBandRatio) this.dom.statVoiceBandRatio.textContent = stats.voiceBandRatio.toFixed(3);
+    if (this.dom.statTotalEnergy) this.dom.statTotalEnergy.textContent = stats.totalSpectralEnergy.toExponential(2);
     if (this.dom.statIsSilent) this.dom.statIsSilent.textContent = stats.isSilent ? 'yes' : 'no';
   }
 

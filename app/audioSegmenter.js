@@ -1,7 +1,7 @@
 export class AudioSegmenter {
   constructor(config) {
     this.sampleRate = 16000;
-    this.preRollMs = config.minSpeak || 200; // Use minSpeak as pre-roll duration or separate config
+    this.preRollMs = (config.minSpeak || 200) * 4; // Use minSpeak as pre-roll duration or separate config
     this.postRollMs = config.minSilence || 1000; // Post-roll is effectively the silence wait time
     
     this.isRecording = false;

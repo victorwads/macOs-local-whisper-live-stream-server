@@ -8,6 +8,12 @@ export class AudioStateManager {
     // Valor legado ~0.0015, usado como delta para detectar fala.
     this.threshold = config.threshold ?? 0.0015;
 
+    // Limite de decisão de fala baseado no speechScore espectral
+    this.speechThreshold = config.speechThreshold ?? 20;
+
+    // Tamanho fixo para FFT usada no cálculo de energia espectral
+    this.fftSize = config.fftSize ?? 1024; // deve ser potência de 2
+
     // Estado atual
     this.isSilent = true;
 
@@ -45,6 +51,8 @@ export class AudioStateManager {
       zcr: 0,
       noiseFloor: this.noiseFloor,
       speechScore: 0,
+      voiceBandRatio: 0,
+      totalSpectralEnergy: 0,
       dynamicThreshold: 0,
       isSpeech: false,
       isSilent: this.isSilent
@@ -74,21 +82,27 @@ export class AudioStateManager {
       this.noiseFloor = this._updateNoiseFloor(this.noiseFloor, rms);
     }
 
-    // 4) Calcula speechScore e limiar dinâmico baseado no piso de ruído
+    // 4) Calcula speechScore com base no espectro (FFT) + RMS
     const eps = 1e-6;
     const dynamicThreshold = this.noiseFloor + this.threshold;
 
-    // Normalizamos o quanto o RMS está acima do piso de ruído,
-    // somando um pequeno termo proporcional ao ZCR.
-    const baseScore = (rms - this.noiseFloor) / (this.threshold + eps);
-    const speechScore = baseScore + zcr * 0.3;
+    const { voiceBandRatio, totalEnergy } = this._computeVoiceBandRatio(samples, sampleRate);
+
+    // Normaliza o quanto o RMS está acima do piso de ruído
+    const normalizedRms = Math.max((rms - this.noiseFloor) / (this.threshold + eps), 0);
+
+    // VoiceBandRatio domina, RMS só ajuda a reforçar fala
+    // Valores típicos de voiceBandRatio: ~0.2–0.8 em fala humana
+    const speechScore = voiceBandRatio * 5 + normalizedRms * 2;
 
     if (this.smoothedSpeechScore == null) {
       this.smoothedSpeechScore = speechScore;
     } else {
-      this.smoothedSpeechScore = this.smoothedSpeechScore * 0.85 + speechScore * 0.15;
+      // Smoothing um pouco mais responsivo que antes
+      this.smoothedSpeechScore = this.smoothedSpeechScore * 0.7 + speechScore * 0.3;
     }
-    const isSpeech = this.smoothedSpeechScore > 1.0;
+
+    const isSpeech = this.smoothedSpeechScore > this.speechThreshold;
 
     // 5) Atualiza estatísticas e envia para UI
     this.updateStateStatistics({
@@ -97,7 +111,9 @@ export class AudioStateManager {
       noiseFloor: this.noiseFloor,
       speechScore,
       dynamicThreshold,
-      isSpeech
+      isSpeech,
+      voiceBandRatio,
+      totalEnergy
     });
 
     // 6) Lógica de histerese tempo-based para silence/speaking
@@ -148,7 +164,9 @@ export class AudioStateManager {
     noiseFloor,
     speechScore,
     dynamicThreshold,
-    isSpeech
+    isSpeech,
+    voiceBandRatio = 0,
+    totalEnergy = 0
   }) {
     const stats = this.stats;
     const newVolume = rms; // usamos RMS como "volume" lógico
@@ -185,6 +203,8 @@ export class AudioStateManager {
     stats.zcr = zcr;
     stats.noiseFloor = noiseFloor;
     stats.speechScore = speechScore;
+    stats.voiceBandRatio = voiceBandRatio;
+    stats.totalSpectralEnergy = totalEnergy;
     stats.dynamicThreshold = dynamicThreshold;
     stats.isSpeech = isSpeech;
     stats.isSilent = this.isSilent;
@@ -242,6 +262,111 @@ export class AudioStateManager {
       prev = curr;
     }
     return crossings / (len - 1);
+  }
+
+  // Calcula o ratio de energia na faixa de voz (300–3400 Hz) em relação à energia total
+  _computeVoiceBandRatio(samples, sampleRate) {
+    const fftSize = this.fftSize;
+    if (!sampleRate || samples.length < fftSize) {
+      return { voiceBandRatio: 0, totalEnergy: 0 };
+    }
+
+    const re = new Float32Array(fftSize);
+    const im = new Float32Array(fftSize);
+
+    // Copia os primeiros fftSize samples (ou até o tamanho disponível)
+    const len = Math.min(fftSize, samples.length);
+    for (let i = 0; i < len; i++) {
+      re[i] = samples[i];
+      im[i] = 0;
+    }
+    for (let i = len; i < fftSize; i++) {
+      re[i] = 0;
+      im[i] = 0;
+    }
+
+    this._fft(re, im);
+
+    const nyquist = sampleRate / 2;
+    const binResolution = nyquist / (fftSize / 2);
+
+    let totalEnergy = 0;
+    let voiceEnergy = 0;
+
+    for (let k = 1; k < fftSize / 2; k++) {
+      const freq = k * binResolution;
+      const mag2 = re[k] * re[k] + im[k] * im[k];
+
+      // Energia total relevante (50 Hz até 8000 Hz)
+      if (freq >= 50 && freq <= 8000) {
+        totalEnergy += mag2;
+      }
+
+      // Faixa clássica de voz (300–3400 Hz)
+      if (freq >= 300 && freq <= 3400) {
+        voiceEnergy += mag2;
+      }
+    }
+
+    if (totalEnergy <= 0) {
+      return { voiceBandRatio: 0, totalEnergy: 0 };
+    }
+
+    return {
+      voiceBandRatio: voiceEnergy / totalEnergy,
+      totalEnergy
+    };
+  }
+
+  // FFT radix-2 simples (in-place) para arrays re/im de tamanho potência de 2
+  _fft(re, im) {
+    const n = re.length;
+    if (n <= 1) return;
+
+    // Bit-reversal
+    let j = 0;
+    for (let i = 1; i < n; i++) {
+      let bit = n >> 1;
+      for (; j & bit; bit >>= 1) {
+        j ^= bit;
+      }
+      j |= bit;
+      if (i < j) {
+        const tmpRe = re[i];
+        const tmpIm = im[i];
+        re[i] = re[j];
+        im[i] = im[j];
+        re[j] = tmpRe;
+        im[j] = tmpIm;
+      }
+    }
+
+    // Cooley–Tukey
+    for (let len = 2; len <= n; len <<= 1) {
+      const ang = -2 * Math.PI / len;
+      const wlenCos = Math.cos(ang);
+      const wlenSin = Math.sin(ang);
+      for (let i = 0; i < n; i += len) {
+        let wCos = 1;
+        let wSin = 0;
+        for (let k = 0; k < (len >> 1); k++) {
+          const uRe = re[i + k];
+          const uIm = im[i + k];
+          const vRe = re[i + k + (len >> 1)] * wCos - im[i + k + (len >> 1)] * wSin;
+          const vIm = re[i + k + (len >> 1)] * wSin + im[i + k + (len >> 1)] * wCos;
+
+          re[i + k] = uRe + vRe;
+          im[i + k] = uIm + vIm;
+          re[i + k + (len >> 1)] = uRe - vRe;
+          im[i + k + (len >> 1)] = uIm - vIm;
+
+          const nextCos = wCos * wlenCos - wSin * wlenSin;
+          const nextSin = wCos * wlenSin + wSin * wlenCos;
+          wCos = nextCos;
+          wSin = nextSin;
+        }
+      }
+    }
   }
 
   updateConfig(key, value) {
