@@ -135,13 +135,18 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         loop = asyncio.get_event_loop()
         try:
             await websocket.send_text(json.dumps({"status": "transcribing segment"}))
+            start_time = time.time()
             result = await loop.run_in_executor(
                 None, engine_local.transcribe_array, audio_segment, current_language
             )
+            process_time = time.time() - start_time
+            audio_duration = audio_segment.size / SAMPLE_RATE
             text = (result.get("text") or "").strip()
             
             # Filter out common hallucination
             if text == "Thank you.":
+                text = ""
+            if text == "[BLANK_AUDIO]":
                 text = ""
                 
             if text:
@@ -149,7 +154,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 await websocket.send_text(json.dumps({
                     "type": "final",
                     "final": text,
-                    "history": final_history
+                    "history": final_history,
+                    "stats": {
+                        "audio_duration": audio_duration,
+                        "processing_time": process_time
+                    }
                 }))
         except Exception as exc:
             logger.error("Transcription failed: %s", exc, exc_info=True)
@@ -159,7 +168,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
     async def process_partial():
         nonlocal last_partial_time, engine_local, last_processed_size
-        if partial_interval_ms <= 0:
+        if partial_interval_ms < 100:
             return
 
         now = time.time() * 1000
@@ -193,9 +202,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         loop = asyncio.get_event_loop()
         try:
             # Run in executor to avoid blocking
+            start_time = time.time()
             result = await loop.run_in_executor(
                 None, engine_local.transcribe_array, audio_copy, current_language
             )
+            process_time = time.time() - start_time
+            audio_duration = audio_copy.size / SAMPLE_RATE
             
             # Check if segment is still valid (no flush happened)
             if my_segment_id != current_segment_id:
@@ -207,7 +219,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 last_processed_size = current_size
                 await websocket.send_text(json.dumps({
                     "type": "partial",
-                    "text": text
+                    "text": text,
+                    "stats": {
+                        "audio_duration": audio_duration,
+                        "processing_time": process_time
+                    }
                 }))
         except Exception:
             # Partial failures shouldn't kill the connection

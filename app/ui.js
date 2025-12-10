@@ -102,6 +102,12 @@ export class UIManager {
     this.dom.log.prepend(line);
   }
 
+  logProcessingStats(type, stats) {
+    if (!stats) return;
+    const msg = `[${type}] Processed ${stats.audio_duration.toFixed(2)}s audio in ${stats.processing_time.toFixed(2)}s`;
+    this.addLog(msg);
+  }
+
   addAudioLog(blobUrl, durationMs) {
     if (!this.dom.log) return;
     const ts = new Date().toLocaleTimeString();

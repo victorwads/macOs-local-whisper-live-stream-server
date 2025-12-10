@@ -22,7 +22,7 @@ export class AudioCapture {
       this.sourceNode = this.audioCtx.createMediaStreamSource(this.mediaStream);
       
       // 512 buffer size provides low latency (~32ms at 16kHz)
-      this.processor = this.audioCtx.createScriptProcessor(512, 1, 1);
+      this.processor = this.audioCtx.createScriptProcessor(1024, 1, 1);
 
       this.processor.onaudioprocess = (event) => {
         const input = event.inputBuffer.getChannelData(0);

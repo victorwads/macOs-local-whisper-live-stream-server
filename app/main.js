@@ -111,10 +111,12 @@ class App {
       }
       if (data.type === 'partial') {
         this.ui.setPartial(data.text);
+        this.ui.logProcessingStats('Partial', data.stats);
       }
       if (data.type === 'final' && data.final !== undefined) {
         this.ui.addFinal(data.final);
         this.ui.setPartial('');
+        this.ui.logProcessingStats('Final', data.stats);
       }
       if (data.status) {
         this.ui.setStatus(data.status);
