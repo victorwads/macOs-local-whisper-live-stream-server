@@ -32,10 +32,9 @@ export function setStatus(text) {
 
 export function addLog(message) {
   const ts = new Date().toLocaleTimeString();
-  logHistory.push(`[${ts}] ${message}`);
-  if (logHistory.length > 50) logHistory.shift();
+  logHistory.unshift(`[${ts}] ${message}`);
   if (dom.log) {
-    dom.log.textContent = logHistory.slice(-20).join('\n');
+    dom.log.textContent = logHistory.join('\n');
     dom.log.scrollTop = dom.log.scrollHeight;
   }
 }

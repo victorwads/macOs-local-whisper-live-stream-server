@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+bash install.sh
+
 cd "$(dirname "$0")"
 source .venv/bin/activate
 
