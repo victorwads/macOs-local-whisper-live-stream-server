@@ -50,6 +50,19 @@ if ! WHISPER_METAL=1 make -j"$(sysctl -n hw.ncpu)"; then
   git pull --ff-only || true
   cmake -DWHISPER_METAL=ON .. && cmake --build . --config Release -j"$(sysctl -n hw.ncpu)"
 fi
+# Normalize binary location
+BIN_DIR="$WHISPER_CPP_DIR/bin"
+mkdir -p "$BIN_DIR"
+for candidate in \
+  "$WHISPER_CPP_DIR/bin/main" \
+  "$WHISPER_CPP_DIR/main" \
+  "$WHISPER_CPP_DIR/build/bin/main" \
+  "$WHISPER_CPP_DIR/build/bin/Release/main"; do
+  if [ -x "$candidate" ]; then
+    cp "$candidate" "$BIN_DIR/main"
+    break
+  fi
+done
 popd >/dev/null
 
 echo "Installation finished."

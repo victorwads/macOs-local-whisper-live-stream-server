@@ -19,10 +19,22 @@ class WhisperCppEngine:
         self.model_name = model_name
         self.models_dir = models_dir or Path(__file__).resolve().parent / "models" / "cpp"
         self.cpp_dir = cpp_dir or Path(__file__).resolve().parent / "whisper.cpp"
-        self.binary = os.getenv("WHISPER_CPP_BIN") or str(self.cpp_dir / "main")
+        self.binary = os.getenv("WHISPER_CPP_BIN") or self._resolve_binary()
         self.model_path = self._resolve_model_path()
         if not Path(self.binary).exists():
             raise FileNotFoundError(f"whisper.cpp binary not found at {self.binary}. Run install.sh.")
+
+    def _resolve_binary(self) -> str:
+        candidates = [
+            self.cpp_dir / "bin" / "main",
+            self.cpp_dir / "main",
+            self.cpp_dir / "build" / "bin" / "main",
+            self.cpp_dir / "build" / "bin" / "Release" / "main",
+        ]
+        for cand in candidates:
+            if cand.exists():
+                return str(cand)
+        return str(self.cpp_dir / "bin" / "main")
 
     def _resolve_model_path(self) -> Path:
         names_to_try = []
