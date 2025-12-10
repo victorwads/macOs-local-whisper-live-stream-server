@@ -9,6 +9,7 @@ from typing import Optional
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from ws import router as ws_router
 from engine_manager import (
@@ -115,3 +116,13 @@ async def transcribe(
             logger.warning("Temporary file %s could not be removed", temp_path)
 
     return JSONResponse(result)
+
+
+# Mount static files from ../app
+# This must be the last route to avoid overriding API endpoints
+app_dir = Path(__file__).resolve().parent.parent / "app"
+if app_dir.exists():
+    app.mount("/", StaticFiles(directory=str(app_dir), html=True), name="static")
+else:
+    logger.warning("App directory not found at %s", app_dir)
+

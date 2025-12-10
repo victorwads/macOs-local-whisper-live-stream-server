@@ -9,7 +9,11 @@ export class AudioStateManager {
     this.threshold = config.threshold ?? 0.0015;
 
     // Limite de decisão de fala baseado no speechScore espectral
-    this.speechThreshold = config.speechThreshold ?? 20;
+    this.speechThreshold = config.speechThreshold ?? 15;
+
+    // Fator de suavização para o speechScore (0.0 a 1.0)
+    // Quanto maior, mais suave (menos jitter), mas mais lento para reagir
+    this.smoothingFactor = 0.6;
 
     // Tamanho fixo para FFT usada no cálculo de energia espectral
     this.fftSize = config.fftSize ?? 1024; // deve ser potência de 2
@@ -35,6 +39,9 @@ export class AudioStateManager {
     this.lastSpeechTime = null;
 
     this.createInitialStateStatistics();
+    
+    // Track when we entered the current state
+    this.stateEnterTime = Date.now();
   }
 
   createInitialStateStatistics() {
@@ -99,7 +106,8 @@ export class AudioStateManager {
       this.smoothedSpeechScore = speechScore;
     } else {
       // Smoothing um pouco mais responsivo que antes
-      this.smoothedSpeechScore = this.smoothedSpeechScore * 0.7 + speechScore * 0.3;
+      const alpha = this.smoothingFactor;
+      this.smoothedSpeechScore = this.smoothedSpeechScore * alpha + speechScore * (1 - alpha);
     }
 
     const isSpeech = this.smoothedSpeechScore > this.speechThreshold;
@@ -214,23 +222,32 @@ export class AudioStateManager {
   }
 
   transitionToSpeak() {
+    const now = Date.now();
+    const silenceDuration = now - this.stateEnterTime;
+    
     this.isSilent = false;
+    this.stateEnterTime = now;
     this.speakStartTime = null;
     this.silenceStartTime = null;
     if (this.stats) {
       this.stats.isSilent = this.isSilent;
     }
-    this.emit('change', { isSilent: false });
+    this.emit('change', { isSilent: false, silenceDuration });
   }
 
   transitionToSilence() {
+    const now = Date.now();
+    // Calculate how long the silence condition was met before triggering
+    const triggerDuration = this.silenceStartTime ? (now - this.silenceStartTime) : 0;
+    
     this.isSilent = true;
+    this.stateEnterTime = now;
     this.silenceStartTime = null;
     this.speakStartTime = null;
     if (this.stats) {
       this.stats.isSilent = this.isSilent;
     }
-    this.emit('change', { isSilent: true });
+    this.emit('change', { isSilent: true, triggerDuration });
   }
 
   // Atualiza noise floor de forma lenta para seguir o ambiente

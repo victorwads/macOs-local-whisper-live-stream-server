@@ -1,9 +1,9 @@
 const DEFAULTS = {
-  model: 'large-v3',
+  model: 'medium',
   threshold: 0.0015,
-  minSilence: 1000,
-  minSpeak: 200,
-  minSeconds: 2.0,
+  minSilence: 180,
+  minSpeak: 250,
+  minSeconds: 1.0,
 };
 
 function loadNumber(key, fallback) {

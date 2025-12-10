@@ -140,6 +140,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     current_segment_id = 0
     last_processed_size = 0
     partial_processing_task = None
+    is_processing_partial = False # Explicit flag for safety
     
     # await websocket.accept() # Already accepted by FastAPI? No, we need to accept.
     # The error "Expected ASGI message 'websocket.send' or 'websocket.close', but got 'websocket.accept'"
@@ -275,7 +276,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     segmenter = AudioSegmenter(min_seconds, MAX_SECONDS, SAMPLE_RATE, on_segment_ready)
 
     async def process_partial():
-        nonlocal last_partial_time, engine_local, last_processed_size
+        nonlocal last_partial_time, engine_local, last_processed_size, is_processing_partial
+        
+        if is_processing_partial:
+            logger.warning("Partial requested but is_processing_partial is True! Skipping.")
+            return
+            
         if partial_interval_ms < 100:
             return
 
@@ -301,17 +307,19 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                  logger.info("Partial skipped: Engine not ready")
                  return
 
-        logger.info(f"Running partial: buffer={current_size/SAMPLE_RATE:.2f}s, interval={time_diff:.0f}ms")
-        last_partial_time = now
-        
-        # Capture segment ID to verify validity later
-        my_segment_id = current_segment_id
-        
-        # Copy buffer for partial transcription
-        audio_copy = np.copy(segmenter.buffer)
-        
-        loop = asyncio.get_event_loop()
+        is_processing_partial = True
         try:
+            logger.info(f"Running partial: buffer={current_size/SAMPLE_RATE:.2f}s, interval={time_diff:.0f}ms")
+            last_partial_time = now
+            
+            # Capture segment ID to verify validity later
+            my_segment_id = current_segment_id
+            
+            # Copy buffer for partial transcription
+            audio_copy = np.copy(segmenter.buffer)
+            
+            loop = asyncio.get_event_loop()
+            
             # Run in executor to avoid blocking
             start_time = time.time()
             result = await loop.run_in_executor(
@@ -329,21 +337,29 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 text = ""
 
             if text:
-                last_processed_size = current_size
-                logger.info(f"Partial result: '{text}' ({process_time*1000:.0f}ms)")
-                await websocket.send_text(json.dumps({
-                    "type": "partial",
-                    "text": text,
-                    "stats": {
-                        "audio_duration": audio_duration,
-                        "processing_time": process_time
-                    }
-                }))
+                # CRITICAL FIX: Check if segment changed while we were processing
+                # If it changed, this partial is for an old segment and we must NOT update last_processed_size
+                # or send the result, as it would corrupt the state for the new segment.
+                if my_segment_id != current_segment_id:
+                    logger.info(f"Partial result ignored: segment changed (id {my_segment_id} -> {current_segment_id})")
+                else:
+                    last_processed_size = current_size
+                    logger.info(f"Partial result: '{text}' ({process_time*1000:.0f}ms)")
+                    await websocket.send_text(json.dumps({
+                        "type": "partial",
+                        "text": text,
+                        "stats": {
+                            "audio_duration": audio_duration,
+                            "processing_time": process_time
+                        }
+                    }))
             else:
                 logger.info("Partial result empty or ignored")
         except Exception as e:
             logger.error(f"Partial failed: {e}")
             pass
+        finally:
+            is_processing_partial = False
 
     await send_models_message()
     engine_task = asyncio.create_task(load_engine(current_model))
@@ -371,7 +387,17 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 else:
                     wait_timeout = 0 # Check immediately
 
-                done, pending = await asyncio.wait([receive_task], timeout=wait_timeout)
+                tasks = [receive_task]
+                if partial_processing_task is not None and not partial_processing_task.done():
+                    tasks.append(partial_processing_task)
+
+                done, pending = await asyncio.wait(tasks, timeout=wait_timeout, return_when=asyncio.FIRST_COMPLETED)
+
+                if partial_processing_task in done:
+                    try:
+                        partial_processing_task.result()
+                    except Exception as e:
+                        logger.error(f"Partial task error: {e}")
 
                 if receive_task in done:
                     # Message received
@@ -400,6 +426,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                                 
                                 engine_local = None
                                 segmenter.reset()
+                                # Reset state for new model to avoid partial lag
+                                current_segment_id += 1
+                                last_processed_size = 0
+                                
                                 engine_task = asyncio.create_task(load_engine(current_model))
                                 await websocket.send_text(json.dumps({"status": f"switching to {current_model}"}))
                         elif ctype == "request_models":
@@ -435,8 +465,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         last_activity_time = time.time()
                 
                 # Try to process partials in background if not already running
-                if partial_processing_task is None or partial_processing_task.done():
+                if not is_processing_partial and (partial_processing_task is None or partial_processing_task.done()):
                     partial_processing_task = asyncio.create_task(process_partial())
+                elif is_processing_partial:
+                    # logger.debug("Skipping partial: already processing")
+                    pass
 
             except WebSocketDisconnect:
                 break

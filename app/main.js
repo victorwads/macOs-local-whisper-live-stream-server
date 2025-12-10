@@ -97,14 +97,18 @@ class App {
       this.ui.updateAudioStats(stats);
     });
 
-    this.audioState.subscribe('change', ({ isSilent }) => {
+    this.audioState.subscribe('change', ({ isSilent, triggerDuration, silenceDuration }) => {
       if (isSilent) {
         // Speech Ended
         this.segmenter.stopSegment();
         this.ws.sendControl({ type: 'silence' });
+        this.ui.addLog(`Silence detected (triggered after ${triggerDuration}ms), sent to server`);
       } else {
         // Speech Started
         this.segmenter.startSegment();
+        if (silenceDuration) {
+            this.ui.addLog(`Resuming speech after ${silenceDuration}ms of silence`);
+        }
       }
     });
 

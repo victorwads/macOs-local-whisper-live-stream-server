@@ -1,4 +1,6 @@
-const WS_URL = 'ws://localhost:8000/stream';
+const currentURL = window.location;
+const protocol = currentURL.protocol === "https:" ? "wss:" : "ws:";
+const WS_URL = `${protocol}//${currentURL.hostname}:${currentURL.port}/stream`;
 
 export class WSClient {
   constructor(config) {

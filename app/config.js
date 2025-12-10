@@ -1,15 +1,15 @@
 export class ConfigManager {
   constructor() {
     this.defaults = {
-      model: 'large-v3',
+      model: 'medium',
       threshold: 0.0015,
       window: 4,
       interval: 0.5,
-      minSilence: 1000,
-      minSpeak: 200,
-      minSeconds: 2.0,
+      minSilence: 180,
+      minSpeak: 250,
+      minSeconds: 1.5,
       language: 'auto',
-      partialInterval: 500,
+      partialInterval: 300,
     };
     
     // Load model from sessionStorage (priority) or localStorage

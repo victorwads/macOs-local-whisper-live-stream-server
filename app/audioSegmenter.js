@@ -1,7 +1,7 @@
 export class AudioSegmenter {
   constructor(config) {
     this.sampleRate = 16000;
-    this.preRollMs = (config.minSpeak || 200) * 4; // Use minSpeak as pre-roll duration or separate config
+    this.preRollMs = (config.minSpeak || 200) * 6; // Use minSpeak as pre-roll duration or separate config
     this.postRollMs = config.minSilence || 1000; // Post-roll is effectively the silence wait time
     
     this.isRecording = false;
@@ -15,7 +15,11 @@ export class AudioSegmenter {
   }
 
   updateConfig(key, value) {
-    if (key === 'minSpeak') this.preRollMs = value;
+    if (key === 'minSpeak') {
+        // Ensure we keep a healthy pre-roll buffer (e.g. 6x the min speak time)
+        // This prevents cutting off the start of words
+        this.preRollMs = value * 6;
+    }
     if (key === 'minSilence') this.postRollMs = value;
   }
 
@@ -55,10 +59,13 @@ export class AudioSegmenter {
     
     // Move pre-roll buffer into current chunks
     // And emit them for streaming so the backend gets the start of the word
+    let preRollDuration = 0;
     for (const chunk of this.preRollBuffer) {
       this.chunks.push(chunk);
       this.emit('chunkReady', chunk);
+      preRollDuration += (chunk.length / this.sampleRate) * 1000;
     }
+    console.log(`[AudioSegmenter] Started segment with ${preRollDuration.toFixed(0)}ms pre-roll`);
     this.preRollBuffer = [];
   }
 
