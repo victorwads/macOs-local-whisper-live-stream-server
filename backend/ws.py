@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 SAMPLE_RATE = 16000
 MAX_SECONDS = 10
 MAX_SAMPLES = MAX_SECONDS * SAMPLE_RATE
-DEFAULT_MIN_SECONDS = 0.5
+DEFAULT_MIN_SECONDS = 2.0
 DEFAULT_INFER_INTERVAL = 0.5
 DEFAULT_WINDOW_SECONDS = 4
 DEFAULT_VOICE_FACTOR = 0.2  # position between min/max RMS to decide speech
@@ -32,8 +32,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     last_infer = 0.0
     backlog_processed = False
     engine_local: Optional = None
-    pending_text = ""
-    confirmed_text = ""
+    pending_fragments: list[str] = []
     final_history: list[str] = []
     last_ids = []
     chunk_meta = deque()  # (id, start, end)
@@ -58,7 +57,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
     window_seconds = max(0.5, min(window_seconds, MAX_SECONDS))
     infer_interval = max(0.2, min(infer_interval, 2.0))
-    min_seconds = max(0.1, min(min_seconds, window_seconds))
+    min_seconds = max(0.5, min_seconds, window_seconds)
     voice_factor = max(0.05, min(voice_factor, 0.9))
 
     window_samples = int(window_seconds * SAMPLE_RATE)
@@ -127,16 +126,38 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             await websocket.send_text(json.dumps({"error": f"model load failed: {exc}"}))
             return None
 
+    def _pending_text() -> str:
+        return " ".join(pending_fragments).strip()
+
+    def _integrate_partial(candidate: str) -> Optional[str]:
+        candidate = candidate.strip()
+        if not candidate:
+            return None
+        if pending_fragments:
+            last = pending_fragments[-1]
+            if candidate == last:
+                return _pending_text()
+            if candidate.startswith(last):
+                pending_fragments[-1] = candidate
+            elif last.startswith(candidate):
+                return _pending_text()
+            elif candidate in last:
+                return _pending_text()
+            elif last in candidate:
+                pending_fragments[-1] = candidate
+            else:
+                pending_fragments.append(candidate)
+        else:
+            pending_fragments.append(candidate)
+        if len(pending_fragments) > 50:
+            pending_fragments.pop(0)
+        return _pending_text()
+
     async def emit_final(status: Optional[str] = None) -> None:
-        nonlocal pending_text, final_history, last_ids, confirmed_text
-        final_block = pending_text.strip()
+        nonlocal final_history, last_ids
+        final_block = _pending_text()
         if not final_block:
             return
-        if confirmed_text and final_block.startswith(confirmed_text):
-            final_block = final_block[len(confirmed_text) :].strip()
-        if not final_block:
-            return
-        confirmed_text = (confirmed_text + " " + final_block).strip()
         final_history.append(final_block)
         payload = {
             "type": "final",
@@ -147,10 +168,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         if status:
             payload["status"] = status
         await websocket.send_text(json.dumps(payload))
-        pending_text = ""
+        pending_fragments.clear()
 
     async def process_audio_chunk(chunk: np.ndarray, chunk_id: Optional[str] = None) -> None:
-        nonlocal buffer, chunk_meta, energy_history, backlog_processed, pending_text, last_infer, last_debug, engine_local, engine_task, last_ids
+        nonlocal buffer, chunk_meta, energy_history, backlog_processed, last_infer, last_debug, engine_local, engine_task, last_ids
         if chunk.size == 0:
             return
         chunk_rms = float(np.sqrt(np.mean(np.square(chunk))))
@@ -225,12 +246,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     )
                 )
                 text = (result.get("text") or "").strip()
-                if text:
-                    pending_text = text
+                combined = _integrate_partial(text)
+                if combined:
                     ids = [mid for (mid, s, e) in chunk_meta]
                     last_ids = ids
                     await websocket.send_text(
-                        json.dumps({"type": "partial", "partial": text, "processed_ids": ids})
+                        json.dumps({"type": "partial", "partial": combined, "processed_ids": ids})
                     )
             except Exception as exc:
                 logger.error("Backlog processing failed: %s", exc, exc_info=True)
@@ -264,8 +285,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 logger.error("Window processing failed: %s", exc, exc_info=True)
                 await websocket.send_text(json.dumps({"error": str(exc)}))
                 return
-            if partial_text:
-                pending_text = partial_text
+            combined = _integrate_partial(partial_text)
+            if combined:
                 ids = []
                 if chunk_meta:
                     window_start = max(buffer.size - window_samples, 0)
@@ -276,7 +297,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     json.dumps(
                         {
                             "type": "partial",
-                            "partial": partial_text,
+                            "partial": combined,
                             "processed_ids": ids,
                             "window_seconds": window_seconds,
                             "interval": infer_interval,
@@ -328,7 +349,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     chunk_meta.clear()
                     backlog_processed = False
                     last_infer = 0.0
-                    pending_text = ""
+                    pending_fragments.clear()
                     last_ids = []
                     continue
                 if ctype == "select_model":
@@ -339,9 +360,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         buffer = np.zeros(0, dtype=np.float32)
                         backlog_processed = False
                         last_infer = 0.0
-                        pending_text = ""
+                        pending_fragments.clear()
                         final_history = []
-                        confirmed_text = ""
                         last_ids = []
                         engine_local = None
                         chunk_meta.clear()
@@ -355,7 +375,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         voice_factor = float(control.get("voice_factor", voice_factor))
                         window_seconds = max(0.5, min(window_seconds, MAX_SECONDS))
                         infer_interval = max(0.2, min(interval, 2.0))
-                        min_seconds = max(0.1, min(min_seconds, window_seconds))
+                        min_seconds = max(0.5, min_seconds, window_seconds)
                         voice_factor = max(0.05, min(voice_factor, 0.9))
                         window_samples = int(window_seconds * SAMPLE_RATE)
                         min_samples_for_infer = int(min_seconds * SAMPLE_RATE)

@@ -7,6 +7,8 @@ export const dom = {
   final: document.getElementById('finalTranscript'),
   status: document.getElementById('status'),
   thresholdInput: document.getElementById('thresholdInput'),
+  minSilenceInput: document.getElementById('minSilenceInput'),
+  minSpeakInput: document.getElementById('minSpeakInput'),
   windowInput: document.getElementById('windowInput'),
   intervalInput: document.getElementById('intervalInput'),
   levelIndicator: document.getElementById('levelIndicator'),
@@ -14,6 +16,10 @@ export const dom = {
   modelSelect: document.getElementById('modelSelect'),
   modelStatus: document.getElementById('modelStatus'),
   suggestedIndicator: document.getElementById('suggestedIndicator'),
+  statMinVol: document.getElementById('statMinVol'),
+  statMaxVol: document.getElementById('statMaxVol'),
+  statAvgVol: document.getElementById('statAvgVol'),
+  statAvgDiff: document.getElementById('statAvgDiff'),
   log: document.getElementById('log'),
 };
 
@@ -25,18 +31,50 @@ export function initInputs() {
   if (dom.intervalInput) dom.intervalInput.value = state.interval;
 }
 
+export function updateAudioStats(stats) {
+  if (dom.statMinVol) dom.statMinVol.textContent = stats.minVolume.toFixed(6);
+  if (dom.statMaxVol) dom.statMaxVol.textContent = stats.maxVolume.toFixed(6);
+  if (dom.statAvgVol) dom.statAvgVol.textContent = stats.avgVolume ? stats.avgVolume.toFixed(6) : '--';
+  if (dom.statAvgDiff) dom.statAvgDiff.textContent = stats.avgDiff ? stats.avgDiff.toFixed(6) : '--';
+}
+
 export function setStatus(text) {
   if (dom.status) dom.status.textContent = text;
   addLog(text);
 }
 
 export function addLog(message) {
+  if (!dom.log) return;
   const ts = new Date().toLocaleTimeString();
-  logHistory.unshift(`[${ts}] ${message}`);
-  if (dom.log) {
-    dom.log.textContent = logHistory.join('\n');
-    dom.log.scrollTop = 0;
-  }
+  const line = document.createElement('div');
+  line.style.borderBottom = '1px solid #333';
+  line.style.padding = '4px 0';
+  line.textContent = `[${ts}] ${message}`;
+  dom.log.prepend(line);
+}
+
+export function addAudioLog(blobUrl, durationMs) {
+  if (!dom.log) return;
+  const ts = new Date().toLocaleTimeString();
+  const container = document.createElement('div');
+  container.style.borderBottom = '1px solid #333';
+  container.style.padding = '8px 0';
+  container.style.display = 'flex';
+  container.style.flexDirection = 'column';
+  container.style.gap = '4px';
+
+  const info = document.createElement('div');
+  info.textContent = `[${ts}] Speech Segment (${(durationMs / 1000).toFixed(2)}s)`;
+  
+  const audio = document.createElement('audio');
+  audio.controls = true;
+  audio.src = blobUrl;
+  audio.style.width = '100%';
+  audio.style.height = '32px';
+
+  container.appendChild(info);
+  container.appendChild(audio);
+  dom.log.prepend(container);
 }
 
 export function updateModelSelect({ supported, installed, current, def }) {
@@ -84,12 +122,24 @@ export function setFinalsUI(finals) {
   if (dom.final) dom.final.value = finals.join('\n');
 }
 
-export function bindInputListeners(onThreshold, onWindow, onInterval, onModel) {
+export function bindInputListeners(onThreshold, onWindow, onInterval, onModel, onMinSilence, onMinSpeak) {
   dom.thresholdInput?.addEventListener('input', () => {
     const val = parseFloat(dom.thresholdInput.value);
     if (!Number.isNaN(val) && val >= 0) {
       saveThreshold(val);
       onThreshold(val);
+    }
+  });
+  dom.minSilenceInput?.addEventListener('input', () => {
+    const val = parseFloat(dom.minSilenceInput.value);
+    if (!Number.isNaN(val) && val >= 0) {
+      onMinSilence(val);
+    }
+  });
+  dom.minSpeakInput?.addEventListener('input', () => {
+    const val = parseFloat(dom.minSpeakInput.value);
+    if (!Number.isNaN(val) && val >= 0) {
+      onMinSpeak(val);
     }
   });
   dom.windowInput?.addEventListener('input', () => {
