@@ -76,6 +76,8 @@ class WhisperServerManager:
         self.server_bin = self._resolve_server_bin()
         self.processes: Dict[str, WhisperServerProcess] = {}
         self.session = requests.Session()
+        self.language = os.getenv("WHISPER_LANGUAGE", "auto")
+        self.response_format = os.getenv("WHISPER_SERVER_RESPONSE", "json")
 
     def _resolve_server_bin(self) -> Path:
         env_bin = os.getenv("WHISPER_SERVER_BIN")
@@ -136,9 +138,13 @@ class WhisperServerManager:
             tmp_path = Path(tmp.name)
         try:
             files = {"file": (tmp_path.name, tmp_path.open("rb"), "audio/wav")}
+            data = {
+                "language": self.language,
+                "response_format": self.response_format,
+            }
             url = f"http://127.0.0.1:{proc.port}/inference"
-            print(f"[server-manager] POST {url} audio={tmp_path.name}")
-            resp = self.session.post(url, files=files, timeout=120)
+            print(f"[server-manager] POST {url} audio={tmp_path.name} lang={data['language']}")
+            resp = self.session.post(url, files=files, data=data, timeout=120)
             print(f"[server-manager] Response {resp.status_code}: {resp.text[:200]}")
             resp.raise_for_status()
             return resp.json()
