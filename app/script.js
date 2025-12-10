@@ -1,5 +1,5 @@
 import { state, saveThreshold, saveWindow, saveInterval, saveModel, pushLevel } from './state.js';
-import { dom, initInputs, setStatus, updateModelSelect, updateIndicators, setPartial, setFinal, bindInputListeners } from './ui.js';
+import { dom, initInputs, setStatus, updateModelSelect, updateIndicators, setPartial, setFinalsUI, bindInputListeners } from './ui.js';
 import { WSClient } from './wsClient.js';
 
 const TARGET_RATE = 16000;
@@ -9,6 +9,7 @@ let processor;
 let mediaStream;
 let sourceNode;
 let isStreaming = false;
+let chunkId = 0;
 
 function rms(buffer) {
   let sum = 0;
@@ -17,6 +18,15 @@ function rms(buffer) {
     sum += v * v;
   }
   return Math.sqrt(sum / buffer.length);
+}
+
+function float32ToBase64(float32Array) {
+  const uint8 = new Uint8Array(float32Array.buffer);
+  let binary = '';
+  for (let i = 0; i < uint8.byteLength; i++) {
+    binary += String.fromCharCode(uint8[i]);
+  }
+  return btoa(binary);
 }
 
 function downsampleBuffer(buffer, sampleRate, outSampleRate) {
@@ -61,8 +71,8 @@ async function startAudioCapture() {
     if (isSilent) return;
     if (wsClient?.ws && wsClient.ws.readyState === WebSocket.OPEN) {
       const view = new Float32Array(downsampled);
-      const bytes = view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength);
-      wsClient.ws.send(bytes);
+      const b64 = float32ToBase64(view);
+      wsClient.ws.send(JSON.stringify({ type: 'chunk', id: chunkId++, audio: b64 }));
     }
   };
 
@@ -94,11 +104,13 @@ function stopAudioCapture() {
 }
 
 async function startStreaming() {
+  wsClient.shouldStreamAudio = true;
   await wsClient.connect(true);
 }
 
 function stopStreaming() {
   stopAudioCapture();
+  wsClient.shouldStreamAudio = false;
   wsClient.disconnect();
   setStatus('Stopped.');
 }

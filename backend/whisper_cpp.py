@@ -7,6 +7,9 @@ from typing import Dict, List, Optional
 
 import numpy as np
 import soundfile as sf
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class WhisperCppEngine:
@@ -69,7 +72,8 @@ class WhisperCppEngine:
 
     def _run_cli(self, audio_path: Path) -> Dict:
         with tempfile.TemporaryDirectory() as tmpdir:
-            out_prefix = Path(tmpdir) / "out"
+            tmp_path = Path(tmpdir)
+            out_prefix = tmp_path / "out"
             cmd = [
                 self.binary,
                 "-m",
@@ -81,15 +85,20 @@ class WhisperCppEngine:
                 "-of",
                 str(out_prefix),
                 "-oj",
-                "--print-progress",
-                "false",
             ]
             proc = subprocess.run(cmd, capture_output=True, text=True)
             if proc.returncode != 0:
                 raise RuntimeError(f"whisper.cpp failed: {proc.stderr or proc.stdout}")
+            # Prefer explicit path, else search
             json_path = out_prefix.with_suffix(".json")
             if not json_path.exists():
-                raise RuntimeError(f"JSON output not found at {json_path}")
+                json_files = list(tmp_path.rglob("*.json"))
+                if json_files:
+                    json_path = json_files[0]
+            if not json_path.exists():
+                raise RuntimeError(
+                    f"JSON output not found. stdout: {proc.stdout} stderr: {proc.stderr}"
+                )
             data = json.loads(json_path.read_text())
             segments_raw: List[Dict] = data.get("segments", [])
             segments: List[Dict] = []
@@ -105,6 +114,10 @@ class WhisperCppEngine:
                 )
                 if text:
                     texts.append(text)
+            if not texts:
+                logger.warning(
+                    "whisper.cpp returned no text. stdout: %s stderr: %s", proc.stdout, proc.stderr
+                )
             return {"text": " ".join(texts).strip(), "segments": segments}
 
     def transcribe_file(self, file_path: str, language: Optional[str] = None) -> Dict:

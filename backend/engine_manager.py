@@ -7,6 +7,7 @@ from download_model import SUPPORTED, fetch_model
 from cpp_model import download_cpp_model
 from whisper_engine import WhisperEngine
 from whisper_cpp import WhisperCppEngine
+from whisper_server_client import server_manager
 
 DEFAULT_MODEL = os.getenv("WHISPER_MODEL_SIZE", "large-v3")
 BACKEND = os.getenv("WHISPER_BACKEND", "cpp").lower()  # cpp or faster
@@ -14,7 +15,21 @@ BACKEND = os.getenv("WHISPER_BACKEND", "cpp").lower()  # cpp or faster
 
 def _make_engine(model_size: str):
     if BACKEND == "cpp":
-        return WhisperCppEngine(model_name=model_size)
+        # server-backed client: keep model loaded
+        class ServerWrapper:
+            def __init__(self, name: str):
+                self.model_size = name
+
+            def transcribe_array(self, audio, language=None):
+                return server_manager.transcribe_array(self.model_size, audio)
+
+            def transcribe_file(self, file_path, language=None):
+                return server_manager.transcribe_file(self.model_size, file_path)
+
+            def info(self):
+                return {"model": self.model_size, "device": "metal", "compute_type": "server"}
+
+        return ServerWrapper(model_size)
     return WhisperEngine(model_size=model_size)
 
 

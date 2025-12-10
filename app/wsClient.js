@@ -1,5 +1,5 @@
-import { state, updateCumulative, clearCumulative } from './state.js';
-import { setStatus, updateModelSelect, setPartial, setFinal, addLog } from './ui.js';
+import { state, addFinal, clearFinals } from './state.js';
+import { setStatus, updateModelSelect, setPartial, setFinalsUI, addLog } from './ui.js';
 
 const WS_URL = 'ws://localhost:8000/stream';
 
@@ -8,6 +8,9 @@ export class WSClient {
     this.ws = null;
     this.pendingStartAudio = false;
     this.onConnect = onConnect;
+    this.shouldStreamAudio = false;
+    this.reconnectDelay = 1000;
+    this.manualClose = false;
   }
 
   sendControl(payload) {
@@ -17,10 +20,12 @@ export class WSClient {
   }
 
   async connect(startMic = false) {
+    if (startMic) this.shouldStreamAudio = true;
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       if (startMic && this.onConnect) await this.onConnect();
       return;
     }
+    this.manualClose = false;
     this.pendingStartAudio = startMic;
     this.ws = new WebSocket(WS_URL);
     this.ws.binaryType = 'arraybuffer';
@@ -39,9 +44,10 @@ export class WSClient {
         if (data.partial !== undefined) {
           setPartial(data.partial);
         }
-        if (data.final !== undefined) {
-          const text = updateCumulative(data.final);
-          setFinal(text);
+        if (data.type === 'final' && data.final !== undefined) {
+          const finals = addFinal(data.final);
+          setFinalsUI(finals);
+          setPartial('');
         }
         if (data.status) {
           setStatus(data.status);
@@ -61,7 +67,13 @@ export class WSClient {
       }
     };
 
-    this.ws.onclose = () => setStatus('WebSocket closed');
+    this.ws.onclose = () => {
+      setStatus('WebSocket closed');
+      if (!this.manualClose) {
+        setTimeout(() => this.connect(this.shouldStreamAudio), this.reconnectDelay);
+        this.reconnectDelay = Math.min(this.reconnectDelay * 2, 5000);
+      }
+    };
 
     const onOpen = () => {
       setStatus('Connected to backend');
@@ -73,6 +85,7 @@ export class WSClient {
       });
       this.sendControl({ type: 'select_model', model: state.model || 'large-v3' });
       this.sendControl({ type: 'request_models' });
+      this.reconnectDelay = 1000;
     };
 
     await new Promise((resolve, reject) => {
@@ -94,12 +107,13 @@ export class WSClient {
   }
 
   disconnect() {
+    this.manualClose = true;
     if (this.ws) {
       this.ws.close();
       this.ws = null;
     }
-    clearCumulative();
+    clearFinals();
     setPartial('');
-    setFinal('');
+    setFinalsUI([]);
   }
 }

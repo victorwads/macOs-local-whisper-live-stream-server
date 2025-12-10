@@ -17,7 +17,7 @@ export const state = {
   window: loadNumber('whisper:window', DEFAULTS.window),
   interval: loadNumber('whisper:interval', DEFAULTS.interval),
   levelHistory: [],
-  cumulativeText: '',
+  finals: [],
   supported: [],
   installed: new Set(),
 };
@@ -47,11 +47,13 @@ export function pushLevel(level) {
   if (state.levelHistory.length > 200) state.levelHistory.shift();
 }
 
-export function clearCumulative() {
-  state.cumulativeText = '';
+export function clearFinals() {
+  state.finals = [];
 }
 
-export function updateCumulative(text) {
-  state.cumulativeText = text || state.cumulativeText;
-  return state.cumulativeText;
+export function addFinal(text) {
+  if (text) {
+    state.finals.push(text);
+  }
+  return state.finals.slice();
 }

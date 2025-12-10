@@ -32,4 +32,16 @@ for path in \
   fi
 done
 export WHISPER_CPP_BIN=${WHISPER_CPP_BIN:-$DEFAULT_CPP_BIN}
+# server binary
+DEFAULT_SERVER_BIN=""
+for path in \
+  "$(dirname "$0")/whisper.cpp/bin/whisper-server" \
+  "$(dirname "$0")/whisper.cpp/build/bin/whisper-server" \
+  "$(dirname "$0")/whisper.cpp/build/bin/Release/whisper-server"; do
+  if [ -x "$path" ]; then
+    DEFAULT_SERVER_BIN="$path"
+    break
+  fi
+done
+export WHISPER_SERVER_BIN=${WHISPER_SERVER_BIN:-$DEFAULT_SERVER_BIN}
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload

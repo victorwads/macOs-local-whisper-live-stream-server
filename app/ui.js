@@ -35,7 +35,7 @@ export function addLog(message) {
   logHistory.unshift(`[${ts}] ${message}`);
   if (dom.log) {
     dom.log.textContent = logHistory.join('\n');
-    dom.log.scrollTop = dom.log.scrollHeight;
+    dom.log.scrollTop = 0;
   }
 }
 
@@ -78,6 +78,10 @@ export function setPartial(text) {
 
 export function setFinal(text) {
   if (dom.final) dom.final.value = text || '';
+}
+
+export function setFinalsUI(finals) {
+  if (dom.final) dom.final.value = finals.join('\n');
 }
 
 export function bindInputListeners(onThreshold, onWindow, onInterval, onModel) {

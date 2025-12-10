@@ -33,6 +33,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     backlog_processed = False
     engine_local: Optional = None
     cumulative_text = ""
+    last_final_sent = ""
+    chunk_meta = deque()  # (id, start, end)
     current_model = DEFAULT_MODEL
     query_params = websocket.query_params
     try:
@@ -119,6 +121,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 return None
         except Exception as exc:
             logger.error("Model load failed: %s", exc, exc_info=True)
+            logger.error("Model load failed: %s", exc, exc_info=True)
             await websocket.send_text(json.dumps({"error": f"model load failed: {exc}"}))
             return None
 
@@ -144,6 +147,36 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 except json.JSONDecodeError:
                     continue
                 ctype = control.get("type")
+                if ctype == "chunk":
+                    cid = control.get("id")
+                    audio_b64 = control.get("audio")
+                    if audio_b64 is None:
+                        continue
+                    try:
+                        decoded = __import__("base64").b64decode(audio_b64)
+                        audio_bytes = np.frombuffer(decoded, dtype=np.float32)
+                    except Exception as exc:
+                        logger.error("Failed to decode chunk %s: %s", cid, exc, exc_info=True)
+                        continue
+                    if audio_bytes.size == 0:
+                        continue
+                    start = buffer.size
+                    buffer = np.concatenate((buffer, audio_bytes))
+                    end = start + audio_bytes.size
+                    chunk_meta.append((cid, start, end))
+                    if buffer.size > MAX_SAMPLES:
+                        overflow = buffer.size - MAX_SAMPLES
+                        buffer = buffer[-MAX_SAMPLES:]
+                        # adjust chunk_meta
+                        new_meta = deque()
+                        for mid, s, e in chunk_meta:
+                            s -= overflow
+                            e -= overflow
+                            if e <= 0:
+                                continue
+                            new_meta.append((mid, max(0, s), e))
+                        chunk_meta = new_meta
+                    continue
                 if ctype == "select_model":
                     new_model = control.get("model") or current_model
                     if new_model != current_model:
@@ -153,6 +186,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         cumulative_text = ""
                         last_infer = 0.0
                         engine_local = None
+                        chunk_meta.clear()
                         engine_task = asyncio.create_task(load_engine(current_model))
                         await websocket.send_text(json.dumps({"status": f"switching to {current_model}"}))
                 elif ctype == "set_params":
@@ -204,6 +238,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             buffer = np.concatenate((buffer, chunk))
             if buffer.size > MAX_SAMPLES:
                 buffer = buffer[-MAX_SAMPLES:]
+                # when raw bytes path used, cannot map IDs; clear meta
+                chunk_meta.clear()
 
             now = time.time()
             if engine_local is None and (now - last_debug) > 1.0:
@@ -255,15 +291,22 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     text = result.get("text", "")
                     if text:
                         cumulative_text = text
+                        ids = [mid for (mid, s, e) in chunk_meta]
                         await websocket.send_text(
-                            json.dumps(
-                                {
-                                    "partial": text,
-                                    "final": cumulative_text,
-                                    "status": "backlog processed",
-                                }
-                            )
+                            json.dumps({"type": "partial", "partial": text, "processed_ids": ids})
                         )
+                        if cumulative_text != last_final_sent:
+                            last_final_sent = cumulative_text
+                            await websocket.send_text(
+                                json.dumps(
+                                    {
+                                        "type": "final",
+                                        "final": cumulative_text,
+                                        "processed_ids": ids,
+                                        "status": "backlog processed",
+                                    }
+                                )
+                            )
                 except Exception as exc:
                     logger.error("Backlog processing failed: %s", exc, exc_info=True)
                     await websocket.send_text(json.dumps({"error": str(exc)}))
@@ -303,18 +346,30 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         cumulative_text = partial_text
                     else:
                         cumulative_text = (cumulative_text + " " + partial_text).strip()
-                payload = json.dumps(
-                    {
-                        "partial": partial_text,
-                        "final": cumulative_text,
-                        "window_seconds": window_seconds,
-                        "interval": infer_interval,
-                        "min_seconds": min_seconds,
-                        "rms": chunk_rms,
-                        "threshold": dyn_threshold,
-                    }
+                    ids = []
+                    if chunk_meta:
+                        window_start = max(buffer.size - window_samples, 0)
+                        window_end = buffer.size
+                        ids = [mid for (mid, s, e) in chunk_meta if e > window_start and s < window_end]
+                    await websocket.send_text(
+                        json.dumps(
+                            {
+                                "type": "partial",
+                                "partial": partial_text,
+                                "processed_ids": ids,
+                                "window_seconds": window_seconds,
+                                "interval": infer_interval,
+                                "min_seconds": min_seconds,
+                                "rms": chunk_rms,
+                                "threshold": dyn_threshold,
+                            }
+                        )
                     )
-                await websocket.send_text(payload)
+                    if cumulative_text and cumulative_text != last_final_sent:
+                        last_final_sent = cumulative_text
+                        await websocket.send_text(
+                            json.dumps({"type": "final", "final": cumulative_text, "processed_ids": ids})
+                        )
     except WebSocketDisconnect:
         pass
     except Exception as exc:  # pragma: no cover - runtime protection
