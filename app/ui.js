@@ -179,19 +179,38 @@ export class UIManager {
   }
 
   setPartial(text) {
-    if (this.dom.partialTranscript) this.dom.partialTranscript.value = text || '';
+    if (!this.dom.partialTranscript) return;
+    const value = text || '';
+    this.dom.partialTranscript.textContent = value;
+    if (value) {
+      this.dom.partialTranscript.classList.add('has-text');
+    } else {
+      this.dom.partialTranscript.classList.remove('has-text');
+    }
+    this.scrollTranscriptToBottom();
   }
 
   addFinal(text) {
     if (text) {
       this.finals.push(text);
-      if (this.dom.final) this.dom.final.value = this.finals.join('\n');
+      if (this.dom.final) {
+        const line = document.createElement('div');
+        line.className = 'transcript-line';
+        line.textContent = text;
+        this.dom.final.appendChild(line);
+      }
+      this.scrollTranscriptToBottom();
     }
   }
   
   clearFinals() {
     this.finals = [];
-    if (this.dom.final) this.dom.final.value = '';
+    if (this.dom.final) this.dom.final.innerHTML = '';
+  }
+
+  scrollTranscriptToBottom() {
+    if (!this.dom.transcript) return;
+    this.dom.transcript.scrollTop = this.dom.transcript.scrollHeight;
   }
 }
 
