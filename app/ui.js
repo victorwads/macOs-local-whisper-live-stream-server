@@ -11,6 +11,8 @@ export class UIManager {
       minSilenceInput: document.getElementById('minSilenceInput'),
       minSpeakInput: document.getElementById('minSpeakInput'),
       minSecondsInput: document.getElementById('minSecondsInput'),
+      languageInput: document.getElementById('languageInput'),
+      partialIntervalInput: document.getElementById('partialIntervalInput'),
       levelIndicator: document.getElementById('levelIndicator'),
       stateIndicator: document.getElementById('stateIndicator'),
       modelSelect: document.getElementById('modelSelect'),
@@ -21,6 +23,7 @@ export class UIManager {
       statAvgVol: document.getElementById('statAvgVol'),
       statAvgDiff: document.getElementById('statAvgDiff'),
       log: document.getElementById('log'),
+      partialTranscript: document.getElementById('partialTranscript'),
     };
 
     this.listeners = {
@@ -41,6 +44,8 @@ export class UIManager {
     if (this.dom.minSilenceInput) this.dom.minSilenceInput.value = this.config.get('minSilence');
     if (this.dom.minSpeakInput) this.dom.minSpeakInput.value = this.config.get('minSpeak');
     if (this.dom.minSecondsInput) this.dom.minSecondsInput.value = this.config.get('minSeconds');
+    if (this.dom.languageInput) this.dom.languageInput.value = this.config.get('language');
+    if (this.dom.partialIntervalInput) this.dom.partialIntervalInput.value = this.config.get('partialInterval');
   }
 
   bindEvents() {
@@ -49,10 +54,12 @@ export class UIManager {
 
     const bindInput = (el, key, isFloat = true) => {
       el?.addEventListener('input', () => {
-        const val = parseFloat(el.value);
-        if (!Number.isNaN(val)) {
-          this.emit('configChange', { key, value: val });
+        let val = el.value;
+        if (isFloat) {
+            val = parseFloat(val);
+            if (Number.isNaN(val)) return;
         }
+        this.emit('configChange', { key, value: val });
       });
     };
 
@@ -60,6 +67,8 @@ export class UIManager {
     bindInput(this.dom.minSilenceInput, 'minSilence');
     bindInput(this.dom.minSpeakInput, 'minSpeak');
     bindInput(this.dom.minSecondsInput, 'minSeconds');
+    bindInput(this.dom.partialIntervalInput, 'partialInterval');
+    bindInput(this.dom.languageInput, 'language', false);
 
     this.dom.modelSelect?.addEventListener('change', () => {
       this.emit('configChange', { key: 'model', value: this.dom.modelSelect.value });
@@ -157,7 +166,7 @@ export class UIManager {
   }
 
   setPartial(text) {
-    if (this.dom.transcript) this.dom.transcript.value = text || '';
+    if (this.dom.partialTranscript) this.dom.partialTranscript.value = text || '';
   }
 
   addFinal(text) {

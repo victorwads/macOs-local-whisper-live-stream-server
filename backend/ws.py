@@ -38,6 +38,16 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     # Ensure min_seconds is reasonable
     min_seconds = max(0.5, min(min_seconds, MAX_SECONDS))
 
+    # New parameters
+    current_language = "auto"
+    partial_interval_ms = 500  # Default 500ms
+    last_partial_time = 0
+    
+    # State for partial processing
+    current_segment_id = 0
+    last_processed_size = 0
+    partial_processing_task = None
+
     async def send_models_message():
         await websocket.send_text(
             json.dumps(
@@ -99,7 +109,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             return None
 
     async def on_segment_ready(audio_segment: np.ndarray):
-        nonlocal engine_local, engine_task
+        nonlocal engine_local, engine_task, current_segment_id, last_processed_size
+        
+        # Invalidate current partials
+        current_segment_id += 1
+        last_processed_size = 0
+        
         if audio_segment.size == 0:
             return
             
@@ -121,7 +136,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         try:
             await websocket.send_text(json.dumps({"status": "transcribing segment"}))
             result = await loop.run_in_executor(
-                None, engine_local.transcribe_array, audio_segment, None
+                None, engine_local.transcribe_array, audio_segment, current_language
             )
             text = (result.get("text") or "").strip()
             
@@ -142,59 +157,149 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
     segmenter = AudioSegmenter(min_seconds, MAX_SECONDS, SAMPLE_RATE, on_segment_ready)
 
+    async def process_partial():
+        nonlocal last_partial_time, engine_local, last_processed_size
+        if partial_interval_ms <= 0:
+            return
+
+        now = time.time() * 1000
+        if now - last_partial_time < partial_interval_ms:
+            return
+
+        # Check if we have enough audio in buffer to try a partial
+        # We don't want to process extremely short segments
+        current_size = segmenter.buffer.size
+        if current_size < SAMPLE_RATE * 0.5: # at least 0.5s
+            return
+            
+        # Check if buffer has grown since last processing
+        if current_size <= last_processed_size:
+            return
+
+        if engine_local is None:
+             if engine_task.done():
+                 engine_local = engine_task.result()
+             else:
+                 return
+
+        last_partial_time = now
+        
+        # Capture segment ID to verify validity later
+        my_segment_id = current_segment_id
+        
+        # Copy buffer for partial transcription
+        audio_copy = np.copy(segmenter.buffer)
+        
+        loop = asyncio.get_event_loop()
+        try:
+            # Run in executor to avoid blocking
+            result = await loop.run_in_executor(
+                None, engine_local.transcribe_array, audio_copy, current_language
+            )
+            
+            # Check if segment is still valid (no flush happened)
+            if my_segment_id != current_segment_id:
+                return
+                
+            text = (result.get("text") or "").strip()
+            
+            if text:
+                last_processed_size = current_size
+                await websocket.send_text(json.dumps({
+                    "type": "partial",
+                    "text": text
+                }))
+        except Exception:
+            # Partial failures shouldn't kill the connection
+            pass
+
     await send_models_message()
     engine_task = asyncio.create_task(load_engine(current_model))
 
     # Create a persistent receive task
     receive_task = asyncio.create_task(websocket.receive())
+    last_activity_time = time.time()
 
     try:
         while True:
             try:
-                # Wait for message OR timeout (inactivity)
-                done, pending = await asyncio.wait([receive_task], timeout=min_seconds)
+                # Determine wait time
+                now = time.time()
+                time_since_activity = now - last_activity_time
+                
+                # We want to wake up for partials
+                wait_timeout = min_seconds
+                if partial_interval_ms > 0:
+                    wait_timeout = min(wait_timeout, partial_interval_ms / 1000.0)
+                
+                # Also ensure we don't sleep past the silence timeout
+                remaining_silence_time = min_seconds - time_since_activity
+                if remaining_silence_time > 0:
+                    wait_timeout = min(wait_timeout, remaining_silence_time)
+                else:
+                    wait_timeout = 0 # Check immediately
+
+                done, pending = await asyncio.wait([receive_task], timeout=wait_timeout)
 
                 if receive_task in done:
                     # Message received
                     message = receive_task.result()
+                    last_activity_time = time.time()
                     
                     # Prepare next receive task immediately
                     receive_task = asyncio.create_task(websocket.receive())
+                    
+                    if "text" in message and message["text"]:
+                        try:
+                            control = json.loads(message["text"])
+                        except json.JSONDecodeError:
+                            continue
+                        
+                        ctype = control.get("type")
+                        if ctype == "silence":
+                            await segmenter.notify_silence()
+                        elif ctype == "select_model":
+                            new_model = control.get("model")
+                            if new_model and new_model != current_model:
+                                current_model = new_model
+                                engine_local = None
+                                segmenter.reset()
+                                engine_task = asyncio.create_task(load_engine(current_model))
+                                await websocket.send_text(json.dumps({"status": f"switching to {current_model}"}))
+                        elif ctype == "request_models":
+                            await send_models_message()
+                        elif ctype == "set_params":
+                            # Update params
+                            if "min_seconds" in control:
+                                segmenter.min_seconds = float(control["min_seconds"])
+                                min_seconds = segmenter.min_seconds
+                            if "language" in control:
+                                current_language = control["language"]
+                            if "partial_interval" in control:
+                                partial_interval_ms = float(control["partial_interval"])
+
+                    if "bytes" in message and message["bytes"]:
+                        chunk = np.frombuffer(message["bytes"], dtype=np.float32)
+                        await segmenter.push_audio_chunk(chunk)
+
                 else:
-                    # Timeout occurred (inactivity)
-                    # If we have data in buffer, flush it now
-                    await segmenter.flush()
-                    continue
+                    # Timeout occurred
+                    # Check if it's a silence timeout
+                    if time.time() - last_activity_time >= min_seconds:
+                        # If we have data in buffer, flush it now
+                        await segmenter.flush()
+                        # Reset activity time to avoid repeated flushing if no new data comes
+                        last_activity_time = time.time()
+                
+                # Try to process partials in background if not already running
+                if partial_processing_task is None or partial_processing_task.done():
+                    partial_processing_task = asyncio.create_task(process_partial())
 
             except WebSocketDisconnect:
                 break
             except RuntimeError as exc:
                 logger.error("Runtime error on websocket receive: %s", exc, exc_info=True)
                 break
-
-            if "text" in message and message["text"]:
-                try:
-                    control = json.loads(message["text"])
-                except json.JSONDecodeError:
-                    continue
-                
-                ctype = control.get("type")
-                if ctype == "silence":
-                    await segmenter.notify_silence()
-                elif ctype == "select_model":
-                    new_model = control.get("model")
-                    if new_model and new_model != current_model:
-                        current_model = new_model
-                        engine_local = None
-                        segmenter.reset()
-                        engine_task = asyncio.create_task(load_engine(current_model))
-                        await websocket.send_text(json.dumps({"status": f"switching to {current_model}"}))
-                elif ctype == "request_models":
-                    await send_models_message()
-            
-            if "bytes" in message and message["bytes"]:
-                chunk = np.frombuffer(message["bytes"], dtype=np.float32)
-                await segmenter.push_audio_chunk(chunk)
                 
     except WebSocketDisconnect:
         pass

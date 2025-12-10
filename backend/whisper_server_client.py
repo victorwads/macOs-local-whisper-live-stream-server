@@ -131,7 +131,7 @@ class WhisperServerManager:
             s.bind(("127.0.0.1", 0))
             return s.getsockname()[1]
 
-    def transcribe_array(self, model_name: str, audio: np.ndarray) -> Dict:
+    def transcribe_array(self, model_name: str, audio: np.ndarray, language: str = None) -> Dict:
         proc = self._get_or_start(model_name)
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
             sf.write(tmp.name, audio, samplerate=16000)
@@ -139,7 +139,7 @@ class WhisperServerManager:
         try:
             files = {"file": (tmp_path.name, tmp_path.open("rb"), "audio/wav")}
             data = {
-                "language": self.language,
+                "language": language or self.language,
                 "response_format": self.response_format,
             }
             url = f"http://127.0.0.1:{proc.port}/inference"
@@ -154,7 +154,7 @@ class WhisperServerManager:
             except OSError:
                 pass
 
-    def transcribe_file(self, model_name: str, file_path: str) -> Dict:
+    def transcribe_file(self, model_name: str, file_path: str, language: str = None) -> Dict:
         data, sr = sf.read(file_path, always_2d=False)
         if data.ndim > 1:
             data = np.mean(data, axis=1)
@@ -163,7 +163,7 @@ class WhisperServerManager:
             x_new = np.linspace(0, len(data) - 1, num=int(len(data) * 16000 / sr))
             data = np.interp(x_new, x_old, data)
         data = data.astype(np.float32)
-        return self.transcribe_array(model_name, data)
+        return self.transcribe_array(model_name, data, language=language)
 
     def stop_all(self) -> None:
         for proc in self.processes.values():

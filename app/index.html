@@ -20,24 +20,32 @@
 
       <div class="controls-grid">
         <div class="control-group">
-          <label for="modelSelect">Model</label>
+          <label for="modelSelect" title="Select the Whisper model size. Larger models are more accurate but slower.">Model</label>
           <select id="modelSelect"></select>
         </div>
         <div class="control-group">
-          <label for="thresholdInput">Silence Threshold</label>
+          <label for="thresholdInput" title="Audio level threshold to detect speech. Adjust if background noise is triggering capture.">Silence Threshold</label>
           <input id="thresholdInput" type="number" step="0.0001" min="0" value="0.0015">
         </div>
         <div class="control-group">
-          <label for="minSilenceInput">Min Silence (ms)</label>
+          <label for="minSilenceInput" title="Milliseconds of silence required to consider a phrase complete.">Min Silence (ms)</label>
           <input id="minSilenceInput" type="number" step="100" min="0" value="1000">
         </div>
         <div class="control-group">
-          <label for="minSpeakInput">Min Speak (ms)</label>
+          <label for="minSpeakInput" title="Minimum milliseconds of speech required to start capturing.">Min Speak (ms)</label>
           <input id="minSpeakInput" type="number" step="50" min="0" value="200">
         </div>
         <div class="control-group">
-          <label for="minSecondsInput">Min Audio (s)</label>
+          <label for="minSecondsInput" title="Minimum duration of audio (in seconds) required before processing a final segment.">Min Audio (s)</label>
           <input id="minSecondsInput" type="number" step="0.1" min="0.5" value="2.0">
+        </div>
+        <div class="control-group">
+          <label for="languageInput" title="Language code for transcription (e.g., 'en', 'pt', 'auto').">Language</label>
+          <input type="text" id="languageInput" value="auto" placeholder="auto">
+        </div>
+        <div class="control-group">
+          <label for="partialIntervalInput" title="Interval in milliseconds to generate partial transcriptions (0 to disable).">Partial Interval (ms)</label>
+          <input type="number" id="partialIntervalInput" step="100" min="0" value="500">
         </div>
       </div>
 
@@ -86,7 +94,7 @@
       
       <div class="transcript-box">
         <div class="card-header">Partial Transcription</div>
-        <textarea id="transcript" placeholder="Partial transcription will appear here..." style="height:100px;"></textarea>
+        <textarea id="partialTranscript" placeholder="Partial transcription will appear here..." style="height:100px;"></textarea>
       </div>
     </div>
 

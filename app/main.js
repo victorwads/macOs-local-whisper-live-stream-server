@@ -42,12 +42,14 @@ class App {
       this.segmenter.updateConfig(key, value);
       
       // Send params to backend if needed
-      if (['window', 'interval'].includes(key)) {
+      if (['window', 'interval', 'language', 'partialInterval'].includes(key)) {
         this.ws.sendControl({
           type: 'set_params',
           window: this.config.get('window'),
           interval: this.config.get('interval'),
           min_seconds: Math.min(0.5, this.config.get('window')),
+          language: this.config.get('language'),
+          partial_interval: this.config.get('partialInterval'),
         });
       }
       if (key === 'model') {
@@ -107,8 +109,8 @@ class App {
       if (data.type === 'models') {
         this.ui.updateModelSelect(data);
       }
-      if (data.partial !== undefined) {
-        this.ui.setPartial(data.partial);
+      if (data.type === 'partial') {
+        this.ui.setPartial(data.text);
       }
       if (data.type === 'final' && data.final !== undefined) {
         this.ui.addFinal(data.final);

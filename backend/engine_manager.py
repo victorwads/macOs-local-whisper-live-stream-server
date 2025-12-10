@@ -21,10 +21,10 @@ def _make_engine(model_size: str):
                 self.model_size = name
 
             def transcribe_array(self, audio, language=None):
-                return server_manager.transcribe_array(self.model_size, audio)
+                return server_manager.transcribe_array(self.model_size, audio, language=language)
 
             def transcribe_file(self, file_path, language=None):
-                return server_manager.transcribe_file(self.model_size, file_path)
+                return server_manager.transcribe_file(self.model_size, file_path, language=language)
 
             def info(self):
                 return {"model": self.model_size, "device": "metal", "compute_type": "server"}

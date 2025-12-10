@@ -7,6 +7,9 @@ export class ConfigManager {
       interval: 0.5,
       minSilence: 1000,
       minSpeak: 200,
+      minSeconds: 2.0,
+      language: 'auto',
+      partialInterval: 500,
     };
     
     this.state = {
@@ -16,6 +19,9 @@ export class ConfigManager {
       interval: this.loadNumber('whisper:interval', this.defaults.interval),
       minSilence: this.loadNumber('whisper:minSilence', this.defaults.minSilence),
       minSpeak: this.loadNumber('whisper:minSpeak', this.defaults.minSpeak),
+      minSeconds: this.loadNumber('whisper:minSeconds', this.defaults.minSeconds),
+      language: this.load('whisper:language', this.defaults.language),
+      partialInterval: this.loadNumber('whisper:partialInterval', this.defaults.partialInterval),
     };
 
     this.listeners = [];

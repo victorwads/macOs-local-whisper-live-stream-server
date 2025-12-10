@@ -70,7 +70,7 @@ class WhisperCppEngine:
             "compute_type": "cpp",
         }
 
-    def _run_cli(self, audio_path: Path) -> Dict:
+    def _run_cli(self, audio_path: Path, language: str = "auto") -> Dict:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
             out_prefix = tmp_path / "out"
@@ -81,7 +81,7 @@ class WhisperCppEngine:
                 "-f",
                 str(audio_path),
                 "-l",
-                "auto",
+                language,
                 "-of",
                 str(out_prefix),
                 "-oj",
@@ -123,17 +123,13 @@ class WhisperCppEngine:
     def transcribe_file(self, file_path: str, language: Optional[str] = None) -> Dict:
         return self._run_cli(Path(file_path))
 
-    def transcribe_array(self, audio: np.ndarray, language: Optional[str] = None) -> Dict:
-        if audio.ndim != 1:
-            audio = np.mean(audio, axis=1)
-        audio = audio.astype(np.float32)
+    def transcribe_array(self, audio: np.ndarray, language: str = "auto") -> Dict:
+        # whisper.cpp CLI expects a WAV file
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-            sf.write(tmp.name, audio, samplerate=16000)
-            tmp_path = Path(tmp.name)
+            tmp_name = tmp.name
         try:
-            return self._run_cli(tmp_path)
+            sf.write(tmp_name, audio, 16000)
+            return self._run_cli(Path(tmp_name), language=language)
         finally:
-            try:
-                tmp_path.unlink()
-            except OSError:
-                pass
+            if os.path.exists(tmp_name):
+                os.unlink(tmp_name)
