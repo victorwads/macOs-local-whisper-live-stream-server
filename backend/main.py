@@ -98,6 +98,7 @@ async def transcribe(
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         try:
             # Stream file content to disk
+            file.file.seek(0)
             shutil.copyfileobj(file.file, tmp)
             temp_path = tmp.name
         except Exception as exc:

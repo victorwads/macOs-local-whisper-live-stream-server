@@ -27,6 +27,7 @@ class WhisperServerProcess:
         self.total_requests = 0
         self.total_partials = 0
         self.total_finals = 0
+        self.open_sockets = 0
 
     def _get_model_size_mb(self) -> str:
         try:
@@ -106,14 +107,9 @@ class WhisperServerProcess:
             else:
                 self.total_finals += 1
 
-    def _get_open_sockets(self) -> int:
-        if not self.proc or not self.proc.pid:
-            return 0
-        try:
-            p = psutil.Process(self.proc.pid)
-            return len(p.connections())
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            return 0
+    def update_socket_count(self, delta: int) -> None:
+        with self.lock:
+            self.open_sockets += delta
 
     def info(self) -> Dict:
         log_file = Path(tempfile.gettempdir()) / f"whisper-server-{self.port}.log"
@@ -130,7 +126,7 @@ class WhisperServerProcess:
             "total_requests": self.total_requests,
             "total_partials": self.total_partials,
             "total_finals": self.total_finals,
-            "open_sockets": self._get_open_sockets(),
+            "open_sockets": self.open_sockets,
         }
 
 
@@ -144,6 +140,7 @@ class WhisperServerManager:
         self.language = os.getenv("WHISPER_LANGUAGE", "auto")
         self.response_format = os.getenv("WHISPER_SERVER_RESPONSE", "json")
         self.manager_lock = threading.Lock()
+        self.socket_counts: Dict[str, int] = {}
 
     def _resolve_server_bin(self) -> Path:
         env_bin = os.getenv("WHISPER_SERVER_BIN")
@@ -247,7 +244,13 @@ class WhisperServerManager:
             proc.stop()
 
     def running_servers(self) -> Dict[str, Dict]:
-        return {name: proc.info() for name, proc in self.processes.items() if proc.is_running()}
+        results = {}
+        for name, proc in self.processes.items():
+            if proc.is_running():
+                info = proc.info()
+                info["open_sockets"] = self.socket_counts.get(name, 0)
+                results[name] = info
+        return results
 
     def stop_server(self, model_name: str) -> bool:
         proc = self.processes.get(model_name)
@@ -257,6 +260,11 @@ class WhisperServerManager:
             raise RuntimeError(f"Cannot stop server {model_name}: {proc.active_requests} active requests")
         proc.stop()
         return True
+
+    def update_socket_count(self, model_name: str, delta: int) -> None:
+        with self.manager_lock:
+            current = self.socket_counts.get(model_name, 0)
+            self.socket_counts[model_name] = max(0, current + delta)
 
 
 server_manager = WhisperServerManager()

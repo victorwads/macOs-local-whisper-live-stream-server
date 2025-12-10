@@ -13,6 +13,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from engine_manager import DEFAULT_MODEL, ensure_engine, installed_models, supported_models, BACKEND
 from download_model import fetch_model
 from cpp_model import download_cpp_model
+from whisper_server_client import server_manager
 from segmenter import AudioSegmenter
 
 router = APIRouter()
@@ -113,7 +114,7 @@ def normalize_language(lang: str) -> str:
 
 @router.websocket("/stream")
 async def websocket_endpoint(websocket: WebSocket) -> None:
-    await websocket.accept()
+    # await websocket.accept() # Moved down to avoid double accept if any logic before it fails or if we want to accept later
     engine_local: Optional = None
     final_history: list[str] = []
     current_model = DEFAULT_MODEL
@@ -139,6 +140,19 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     current_segment_id = 0
     last_processed_size = 0
     partial_processing_task = None
+    
+    # await websocket.accept() # Already accepted by FastAPI? No, we need to accept.
+    # The error "Expected ASGI message 'websocket.send' or 'websocket.close', but got 'websocket.accept'"
+    # usually means we are trying to accept an already accepted connection or doing something out of order.
+    # Let's check if we are calling accept twice or if there is some middleware interference.
+    # Actually, looking at the traceback, it seems like standard FastAPI usage.
+    # Wait, did I accidentally duplicate the accept call in previous edits?
+    
+    await websocket.accept()
+    logger.info("WebSocket connected")
+    
+    # Track connection for the default model initially
+    server_manager.update_socket_count(current_model, 1)
 
     async def send_models_message():
         await websocket.send_text(
@@ -379,7 +393,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         elif ctype == "select_model":
                             new_model = control.get("model")
                             if new_model and new_model != current_model:
+                                # Update socket counts
+                                server_manager.update_socket_count(current_model, -1)
                                 current_model = new_model
+                                server_manager.update_socket_count(current_model, 1)
+                                
                                 engine_local = None
                                 segmenter.reset()
                                 engine_task = asyncio.create_task(load_engine(current_model))
@@ -434,3 +452,6 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             await websocket.send_text(json.dumps({"error": str(exc)}))
         except Exception:
             pass
+    finally:
+        server_manager.update_socket_count(current_model, -1)
+        logger.info("WebSocket disconnected")
