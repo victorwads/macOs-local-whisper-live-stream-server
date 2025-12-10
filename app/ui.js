@@ -1,27 +1,181 @@
-import { state, saveModel, saveThreshold, saveWindow, saveInterval, pushLevel } from './state.js';
+export class UIManager {
+  constructor(configManager) {
+    this.config = configManager;
+    this.dom = {
+      startBtn: document.getElementById('startBtn'),
+      stopBtn: document.getElementById('stopBtn'),
+      transcript: document.getElementById('transcript'),
+      final: document.getElementById('finalTranscript'),
+      status: document.getElementById('status'),
+      thresholdInput: document.getElementById('thresholdInput'),
+      minSilenceInput: document.getElementById('minSilenceInput'),
+      minSpeakInput: document.getElementById('minSpeakInput'),
+      windowInput: document.getElementById('windowInput'),
+      intervalInput: document.getElementById('intervalInput'),
+      levelIndicator: document.getElementById('levelIndicator'),
+      stateIndicator: document.getElementById('stateIndicator'),
+      modelSelect: document.getElementById('modelSelect'),
+      modelStatus: document.getElementById('modelStatus'),
+      suggestedIndicator: document.getElementById('suggestedIndicator'),
+      statMinVol: document.getElementById('statMinVol'),
+      statMaxVol: document.getElementById('statMaxVol'),
+      statAvgVol: document.getElementById('statAvgVol'),
+      statAvgDiff: document.getElementById('statAvgDiff'),
+      log: document.getElementById('log'),
+    };
 
-export const dom = {
-  startBtn: document.getElementById('startBtn'),
-  stopBtn: document.getElementById('stopBtn'),
-  transcript: document.getElementById('transcript'),
-  final: document.getElementById('finalTranscript'),
-  status: document.getElementById('status'),
-  thresholdInput: document.getElementById('thresholdInput'),
-  minSilenceInput: document.getElementById('minSilenceInput'),
-  minSpeakInput: document.getElementById('minSpeakInput'),
-  windowInput: document.getElementById('windowInput'),
-  intervalInput: document.getElementById('intervalInput'),
-  levelIndicator: document.getElementById('levelIndicator'),
-  stateIndicator: document.getElementById('stateIndicator'),
-  modelSelect: document.getElementById('modelSelect'),
-  modelStatus: document.getElementById('modelStatus'),
-  suggestedIndicator: document.getElementById('suggestedIndicator'),
-  statMinVol: document.getElementById('statMinVol'),
-  statMaxVol: document.getElementById('statMaxVol'),
-  statAvgVol: document.getElementById('statAvgVol'),
-  statAvgDiff: document.getElementById('statAvgDiff'),
-  log: document.getElementById('log'),
-};
+    this.listeners = {
+      start: [],
+      stop: [],
+      configChange: []
+    };
+
+    this.levelHistory = [];
+    this.finals = [];
+
+    this.initInputs();
+    this.bindEvents();
+  }
+
+  initInputs() {
+    if (this.dom.thresholdInput) this.dom.thresholdInput.value = this.config.get('threshold');
+    if (this.dom.minSilenceInput) this.dom.minSilenceInput.value = this.config.get('minSilence');
+    if (this.dom.minSpeakInput) this.dom.minSpeakInput.value = this.config.get('minSpeak');
+    if (this.dom.windowInput) this.dom.windowInput.value = this.config.get('window');
+    if (this.dom.intervalInput) this.dom.intervalInput.value = this.config.get('interval');
+  }
+
+  bindEvents() {
+    this.dom.startBtn?.addEventListener('click', () => this.emit('start'));
+    this.dom.stopBtn?.addEventListener('click', () => this.emit('stop'));
+
+    const bindInput = (el, key, isFloat = true) => {
+      el?.addEventListener('input', () => {
+        const val = parseFloat(el.value);
+        if (!Number.isNaN(val)) {
+          this.emit('configChange', { key, value: val });
+        }
+      });
+    };
+
+    bindInput(this.dom.thresholdInput, 'threshold');
+    bindInput(this.dom.minSilenceInput, 'minSilence');
+    bindInput(this.dom.minSpeakInput, 'minSpeak');
+    bindInput(this.dom.windowInput, 'window');
+    bindInput(this.dom.intervalInput, 'interval');
+
+    this.dom.modelSelect?.addEventListener('change', () => {
+      this.emit('configChange', { key: 'model', value: this.dom.modelSelect.value });
+    });
+  }
+
+  subscribe(event, callback) {
+    if (this.listeners[event]) {
+      this.listeners[event].push(callback);
+    }
+  }
+
+  emit(event, data) {
+    if (this.listeners[event]) {
+      this.listeners[event].forEach(cb => cb(data));
+    }
+  }
+
+  setStatus(text) {
+    if (this.dom.status) this.dom.status.textContent = text;
+    this.addLog(text);
+  }
+
+  addLog(message) {
+    if (!this.dom.log) return;
+    const ts = new Date().toLocaleTimeString();
+    const line = document.createElement('div');
+    line.style.borderBottom = '1px solid #333';
+    line.style.padding = '4px 0';
+    line.textContent = `[${ts}] ${message}`;
+    this.dom.log.prepend(line);
+  }
+
+  addAudioLog(blobUrl, durationMs) {
+    if (!this.dom.log) return;
+    const ts = new Date().toLocaleTimeString();
+    const container = document.createElement('div');
+    container.style.borderBottom = '1px solid #333';
+    container.style.padding = '8px 0';
+    container.style.display = 'flex';
+    container.style.flexDirection = 'column';
+    container.style.gap = '4px';
+
+    const info = document.createElement('div');
+    info.textContent = `[${ts}] Speech Segment (${(durationMs / 1000).toFixed(2)}s)`;
+    
+    const audio = document.createElement('audio');
+    audio.controls = true;
+    audio.src = blobUrl;
+    audio.style.width = '100%';
+    audio.style.height = '32px';
+
+    container.appendChild(info);
+    container.appendChild(audio);
+    this.dom.log.prepend(container);
+  }
+
+  updateAudioStats(stats) {
+    if (this.dom.statMinVol) this.dom.statMinVol.textContent = stats.minVolume.toFixed(6);
+    if (this.dom.statMaxVol) this.dom.statMaxVol.textContent = stats.maxVolume.toFixed(6);
+    if (this.dom.statAvgVol) this.dom.statAvgVol.textContent = stats.avgVolume ? stats.avgVolume.toFixed(6) : '--';
+    if (this.dom.statAvgDiff) this.dom.statAvgDiff.textContent = stats.avgDiff ? stats.avgDiff.toFixed(6) : '--';
+  }
+
+  updateIndicators(level, isSilent) {
+    if (this.dom.levelIndicator) this.dom.levelIndicator.textContent = `Level: ${level.toFixed(5)}`;
+    if (this.dom.stateIndicator) this.dom.stateIndicator.textContent = `State: ${isSilent ? 'silence' : 'sending'}`;
+    
+    this.levelHistory.push(level);
+    if (this.levelHistory.length > 200) this.levelHistory.shift();
+
+    const minL = Math.min(...this.levelHistory);
+    const maxL = Math.max(...this.levelHistory);
+    const suggested = minL + (maxL - minL) * 0.2;
+    if (this.dom.suggestedIndicator && Number.isFinite(suggested)) {
+      this.dom.suggestedIndicator.textContent = `Suggested: ${suggested.toFixed(5)}`;
+    }
+  }
+
+  updateModelSelect({ supported, installed, current, def }) {
+    const models = supported.length ? supported : Array.from(new Set(installed || []));
+    if (!models.length) return;
+    
+    if (this.dom.modelSelect) {
+      this.dom.modelSelect.innerHTML = '';
+      models.forEach((m) => {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = `${m}${installed.includes(m) ? ' (installed)' : ''}`;
+        if (m === current) opt.selected = true;
+        this.dom.modelSelect.appendChild(opt);
+      });
+    }
+    if (this.dom.modelStatus) this.dom.modelStatus.textContent = `Selected model: ${current}`;
+  }
+
+  setPartial(text) {
+    if (this.dom.transcript) this.dom.transcript.value = text || '';
+  }
+
+  addFinal(text) {
+    if (text) {
+      this.finals.push(text);
+      if (this.dom.final) this.dom.final.value = this.finals.join('\n');
+    }
+  }
+  
+  clearFinals() {
+    this.finals = [];
+    if (this.dom.final) this.dom.final.value = '';
+  }
+}
+
 
 let logHistory = [];
 

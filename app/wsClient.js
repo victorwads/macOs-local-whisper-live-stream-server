@@ -1,109 +1,62 @@
-import { state, addFinal, clearFinals } from './state.js';
-import { setStatus, updateModelSelect, setPartial, setFinalsUI, addLog } from './ui.js';
-
 const WS_URL = 'ws://localhost:8000/stream';
 
 export class WSClient {
-  constructor(onConnect) {
+  constructor(config) {
     this.ws = null;
-    this.pendingStartAudio = false;
-    this.onConnect = onConnect;
-    this.shouldStreamAudio = false;
     this.reconnectDelay = 1000;
     this.manualClose = false;
+    this.listeners = {
+      open: [],
+      close: [],
+      error: [],
+      message: []
+    };
   }
 
-  sendControl(payload) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(payload));
+  subscribe(event, callback) {
+    if (this.listeners[event]) {
+      this.listeners[event].push(callback);
     }
   }
 
-  async connect(startMic = false) {
-    if (startMic) this.shouldStreamAudio = true;
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      if (startMic && this.onConnect) await this.onConnect();
-      return;
+  emit(event, data) {
+    if (this.listeners[event]) {
+      this.listeners[event].forEach(cb => cb(data));
     }
+  }
+
+  async connect() {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
+    
     this.manualClose = false;
-    this.pendingStartAudio = startMic;
     this.ws = new WebSocket(WS_URL);
     this.ws.binaryType = 'arraybuffer';
 
-    this.ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'models') {
-          updateModelSelect({
-            supported: data.supported,
-            installed: data.installed,
-            current: data.current,
-            def: data.default,
-          });
-        }
-        if (data.partial !== undefined) {
-          setPartial(data.partial);
-        }
-        if (data.type === 'final' && data.final !== undefined) {
-          const finals = addFinal(data.final);
-          setFinalsUI(finals);
-          setPartial('');
-        }
-        if (data.status) {
-          setStatus(data.status);
-        }
-        if (data.type === 'model_info') {
-          const info = `${data.status} (device=${data.device}, compute=${data.compute_type})`;
-          addLog(info);
-        }
-        if (data.type === 'debug') {
-          addLog(data.status || 'debug');
-        }
-        if (data.error) {
-          setStatus(`Server error: ${data.error}`);
-        }
-      } catch (err) {
-        console.error('Bad message', err);
-      }
+    this.ws.onopen = () => {
+      this.reconnectDelay = 1000;
+      this.emit('open');
     };
 
     this.ws.onclose = () => {
-      setStatus('WebSocket closed');
+      this.emit('close');
       if (!this.manualClose) {
-        setTimeout(() => this.connect(this.shouldStreamAudio), this.reconnectDelay);
+        setTimeout(() => this.connect(), this.reconnectDelay);
         this.reconnectDelay = Math.min(this.reconnectDelay * 2, 5000);
       }
     };
 
-    const onOpen = () => {
-      setStatus('Connected to backend');
-      this.sendControl({
-        type: 'set_params',
-        window: state.window,
-        interval: state.interval,
-        min_seconds: Math.min(0.5, state.window),
-      });
-      this.sendControl({ type: 'select_model', model: state.model || 'large-v3' });
-      this.sendControl({ type: 'request_models' });
-      this.reconnectDelay = 1000;
+    this.ws.onerror = (err) => {
+      this.emit('error', err);
     };
 
-    await new Promise((resolve, reject) => {
-      this.ws.addEventListener(
-        'open',
-        () => {
-          onOpen();
-          resolve();
-        },
-        { once: true }
-      );
-      this.ws.addEventListener('error', (err) => reject(err), { once: true });
-    });
-
-    if (this.pendingStartAudio && this.onConnect) {
-      await this.onConnect();
-      this.pendingStartAudio = false;
-    }
+    this.ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        this.emit('message', data);
+      } catch (err) {
+        console.error('Failed to parse WebSocket message', err);
+      }
+    };
   }
 
   disconnect() {
@@ -112,8 +65,17 @@ export class WSClient {
       this.ws.close();
       this.ws = null;
     }
-    clearFinals();
-    setPartial('');
-    setFinalsUI([]);
+  }
+
+  sendAudio(float32Array) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(float32Array);
+    }
+  }
+
+  sendControl(payload) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(payload));
+    }
   }
 }

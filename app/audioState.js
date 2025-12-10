@@ -59,7 +59,7 @@ export class AudioStateManager {
     this.emit('statsUpdate', stats);
   }
 
-  setVolume(volume) {
+  processVolume(volume) {
     this.updateStateStatistics(volume);
     
     const now = Date.now();
@@ -105,7 +105,7 @@ export class AudioStateManager {
     }
   }
 
-  addEventListener(event, callback) {
+  subscribe(event, callback) {
     if (this.listeners[event]) {
       this.listeners[event].push(callback);
     }
