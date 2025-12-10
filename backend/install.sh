@@ -36,4 +36,20 @@ if ! command -v ffmpeg >/dev/null 2>&1; then
   fi
 fi
 
+# Build whisper.cpp with Metal for GPU usage (no model download here)
+if [ ! -d "$WHISPER_CPP_DIR" ]; then
+  git clone https://github.com/ggerganov/whisper.cpp.git "$WHISPER_CPP_DIR"
+fi
+pushd "$WHISPER_CPP_DIR" >/dev/null
+git pull --ff-only || true
+make clean >/dev/null 2>&1 || true
+if ! WHISPER_METAL=1 make -j"$(sysctl -n hw.ncpu)"; then
+  echo "make failed; trying CMake path" >&2
+  mkdir -p build
+  cd build
+  git pull --ff-only || true
+  cmake -DWHISPER_METAL=ON .. && cmake --build . --config Release -j"$(sysctl -n hw.ncpu)"
+fi
+popd >/dev/null
+
 echo "Installation finished."
