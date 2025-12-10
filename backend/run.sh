@@ -44,4 +44,5 @@ for path in \
   fi
 done
 export WHISPER_SERVER_BIN=${WHISPER_SERVER_BIN:-$DEFAULT_SERVER_BIN}
+echo "Using WHISPER_SERVER_BIN=${WHISPER_SERVER_BIN}, WHISPER_CPP_BIN=${WHISPER_CPP_BIN}"
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload

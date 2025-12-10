@@ -73,7 +73,6 @@ class WhisperServerProcess:
 class WhisperServerManager:
     def __init__(self) -> None:
         self.base_port = int(os.getenv("WHISPER_SERVER_BASE_PORT", "9000"))
-        self.next_port = self.base_port
         self.models_dir = Path(os.getenv("WHISPER_MODELS_DIR") or Path(__file__).resolve().parent / "models")
         self.server_bin = self._resolve_server_bin()
         self.processes: Dict[str, WhisperServerProcess] = {}
@@ -109,14 +108,27 @@ class WhisperServerManager:
             proc.start()
             return proc
         model_path = self._resolve_model(model_name)
-        port = self.next_port
-        self.next_port += 1
         if not self.server_bin or not self.server_bin.exists():
             raise FileNotFoundError("whisper-server binary not found. Run install.sh to build it.")
+        port = self._reserve_port()
         proc = WhisperServerProcess(model_path=model_path, server_bin=self.server_bin, port=port)
         proc.start()
         self.processes[model_name] = proc
+        print(f"[server-manager] started whisper-server for {model_name} on port {port}")
         return proc
+
+    def _reserve_port(self) -> int:
+        # try sequential from base_port, then fallback to OS-assigned free port
+        for p in range(self.base_port, self.base_port + 100):
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                try:
+                    s.bind(("127.0.0.1", p))
+                    return p
+                except OSError:
+                    continue
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            return s.getsockname()[1]
 
     def transcribe_array(self, model_name: str, audio: np.ndarray) -> Dict:
         proc = self._get_or_start(model_name)
