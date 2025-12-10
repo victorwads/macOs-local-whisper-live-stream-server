@@ -22,7 +22,10 @@ export class AudioCapture {
       this.sourceNode = this.audioCtx.createMediaStreamSource(this.mediaStream);
       
       // 512 buffer size provides low latency (~32ms at 16kHz)
-      this.processor = this.audioCtx.createScriptProcessor(1024, 1, 1);
+      // 2048 ~= 128ms at 16kHz, good for speech
+      // 4096 ~= 256ms at 16kHz, good balance
+      // 8192 ~= 512ms at 16kHz, higher latency but fewer callbacks
+      this.processor = this.audioCtx.createScriptProcessor(4096, 1, 1);
 
       this.processor.onaudioprocess = (event) => {
         const input = event.inputBuffer.getChannelData(0);
@@ -30,7 +33,8 @@ export class AudioCapture {
         const downsampled = downsampleBuffer(input, this.audioCtx.sampleRate, this.targetRate);
         
         if (downsampled && downsampled.length > 0 && this.onAudioChunk) {
-          this.onAudioChunk(downsampled);
+          // Passamos também o sampleRate efetivo para consumidores
+          this.onAudioChunk(downsampled, this.targetRate);
         }
       };
 

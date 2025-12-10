@@ -23,6 +23,12 @@ export class UIManager {
       statMaxVol: document.getElementById('statMaxVol'),
       statAvgVol: document.getElementById('statAvgVol'),
       statAvgDiff: document.getElementById('statAvgDiff'),
+      statRms: document.getElementById('statRms'),
+      statZcr: document.getElementById('statZcr'),
+      statNoiseFloor: document.getElementById('statNoiseFloor'),
+      statDynamicThreshold: document.getElementById('statDynamicThreshold'),
+      statSpeechScore: document.getElementById('statSpeechScore'),
+      statIsSpeech: document.getElementById('statIsSpeech'),
       log: document.getElementById('log'),
       partialTranscript: document.getElementById('partialTranscript'),
     };
@@ -144,6 +150,14 @@ export class UIManager {
     if (this.dom.statMaxVol) this.dom.statMaxVol.textContent = stats.maxVolume.toFixed(6);
     if (this.dom.statAvgVol) this.dom.statAvgVol.textContent = stats.avgVolume ? stats.avgVolume.toFixed(6) : '--';
     if (this.dom.statAvgDiff) this.dom.statAvgDiff.textContent = stats.avgDiff ? stats.avgDiff.toFixed(6) : '--';
+
+    // Novas métricas de VAD
+    if (this.dom.statRms) this.dom.statRms.textContent = stats.rms.toFixed(6);
+    if (this.dom.statZcr) this.dom.statZcr.textContent = stats.zcr.toFixed(6);
+    if (this.dom.statNoiseFloor) this.dom.statNoiseFloor.textContent = stats.noiseFloor.toFixed(6);
+    if (this.dom.statDynamicThreshold) this.dom.statDynamicThreshold.textContent = stats.dynamicThreshold.toFixed(6);
+    if (this.dom.statSpeechScore) this.dom.statSpeechScore.textContent = stats.speechScore.toFixed(3);
+    if (this.dom.statIsSpeech) this.dom.statIsSpeech.textContent = stats.isSpeech ? 'yes' : 'no';
   }
 
   updateIndicators(level, isSilent) {
@@ -212,148 +226,4 @@ export class UIManager {
     if (!this.dom.transcript) return;
     this.dom.transcript.scrollTop = this.dom.transcript.scrollHeight;
   }
-}
-
-
-let logHistory = [];
-
-export function initInputs() {
-  if (dom.thresholdInput) dom.thresholdInput.value = state.threshold;
-  if (dom.minSilenceInput) dom.minSilenceInput.value = state.minSilence;
-  if (dom.minSpeakInput) dom.minSpeakInput.value = state.minSpeak;
-  if (dom.windowInput) dom.windowInput.value = state.window;
-  if (dom.intervalInput) dom.intervalInput.value = state.interval;
-}
-
-export function updateAudioStats(stats) {
-  if (dom.statMinVol) dom.statMinVol.textContent = stats.minVolume.toFixed(6);
-  if (dom.statMaxVol) dom.statMaxVol.textContent = stats.maxVolume.toFixed(6);
-  if (dom.statAvgVol) dom.statAvgVol.textContent = stats.avgVolume ? stats.avgVolume.toFixed(6) : '--';
-  if (dom.statAvgDiff) dom.statAvgDiff.textContent = stats.avgDiff ? stats.avgDiff.toFixed(6) : '--';
-}
-
-export function setStatus(text) {
-  if (dom.status) dom.status.textContent = text;
-  addLog(text);
-}
-
-export function addLog(message) {
-  if (!dom.log) return;
-  const ts = new Date().toLocaleTimeString();
-  const line = document.createElement('div');
-  line.style.borderBottom = '1px solid #333';
-  line.style.padding = '4px 0';
-  line.textContent = `[${ts}] ${message}`;
-  dom.log.prepend(line);
-}
-
-export function addAudioLog(blobUrl, durationMs) {
-  if (!dom.log) return;
-  const ts = new Date().toLocaleTimeString();
-  const container = document.createElement('div');
-  container.style.borderBottom = '1px solid #333';
-  container.style.padding = '8px 0';
-  container.style.display = 'flex';
-  container.style.flexDirection = 'column';
-  container.style.gap = '4px';
-
-  const info = document.createElement('div');
-  info.textContent = `[${ts}] Speech Segment (${(durationMs / 1000).toFixed(2)}s)`;
-  
-  const audio = document.createElement('audio');
-  audio.controls = true;
-  audio.src = blobUrl;
-  audio.style.width = '100%';
-  audio.style.height = '32px';
-
-  container.appendChild(info);
-  container.appendChild(audio);
-  dom.log.prepend(container);
-}
-
-export function updateModelSelect({ supported, installed, current, def }) {
-  state.supported = supported || state.supported;
-  state.installed = new Set(installed || []);
-  const models = state.supported.length ? state.supported : Array.from(state.installed);
-  if (!models.length) return;
-  const newModel = current || state.model || def || models[0];
-  state.model = newModel;
-  if (dom.modelSelect) {
-    dom.modelSelect.innerHTML = '';
-    models.forEach((m) => {
-      const opt = document.createElement('option');
-      opt.value = m;
-      opt.textContent = `${m}${state.installed.has(m) ? ' (installed)' : ''}`;
-      if (m === state.model) opt.selected = true;
-      dom.modelSelect.appendChild(opt);
-    });
-  }
-  saveModel(state.model);
-  if (dom.modelStatus) dom.modelStatus.textContent = `Selected model: ${state.model}`;
-}
-
-export function updateIndicators(level, isSilent) {
-  if (dom.levelIndicator) dom.levelIndicator.textContent = `Level: ${level.toFixed(5)}`;
-  if (dom.stateIndicator) dom.stateIndicator.textContent = `State: ${isSilent ? 'silence' : 'sending'}`;
-  pushLevel(level);
-  const minL = Math.min(...state.levelHistory);
-  const maxL = Math.max(...state.levelHistory);
-  const suggested = minL + (maxL - minL) * 0.2;
-  if (dom.suggestedIndicator && Number.isFinite(suggested)) {
-    dom.suggestedIndicator.textContent = `Suggested: ${suggested.toFixed(5)}`;
-  }
-}
-
-export function setPartial(text) {
-  if (dom.transcript) dom.transcript.value = text || '';
-}
-
-export function setFinal(text) {
-  if (dom.final) dom.final.value = text || '';
-}
-
-export function setFinalsUI(finals) {
-  if (dom.final) dom.final.value = finals.join('\n');
-}
-
-export function bindInputListeners(onThreshold, onWindow, onInterval, onModel, onMinSilence, onMinSpeak) {
-  dom.thresholdInput?.addEventListener('input', () => {
-    const val = parseFloat(dom.thresholdInput.value);
-    if (!Number.isNaN(val) && val >= 0) {
-      saveThreshold(val);
-      onThreshold(val);
-    }
-  });
-  dom.minSilenceInput?.addEventListener('input', () => {
-    const val = parseFloat(dom.minSilenceInput.value);
-    if (!Number.isNaN(val) && val >= 0) {
-      onMinSilence(val);
-    }
-  });
-  dom.minSpeakInput?.addEventListener('input', () => {
-    const val = parseFloat(dom.minSpeakInput.value);
-    if (!Number.isNaN(val) && val >= 0) {
-      onMinSpeak(val);
-    }
-  });
-  dom.windowInput?.addEventListener('input', () => {
-    const val = parseFloat(dom.windowInput.value);
-    if (!Number.isNaN(val) && val >= 0.5) {
-      saveWindow(val);
-      onWindow(val);
-    }
-  });
-  dom.intervalInput?.addEventListener('input', () => {
-    const val = parseFloat(dom.intervalInput.value);
-    if (!Number.isNaN(val) && val >= 0.2) {
-      saveInterval(val);
-      onInterval(val);
-    }
-  });
-  dom.modelSelect?.addEventListener('change', () => {
-    const model = dom.modelSelect.value;
-    saveModel(model);
-    if (dom.modelStatus) dom.modelStatus.textContent = `Selected model: ${model}`;
-    onModel(model);
-  });
 }

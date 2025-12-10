@@ -4,7 +4,7 @@ import { AudioCapture } from './audioCapture.js';
 import { AudioStateManager } from './audioState.js';
 import { AudioSegmenter } from './audioSegmenter.js';
 import { WSClient } from './wsClient.js';
-import { rms, encodeWAV } from './utils.js';
+import { encodeWAV } from './utils.js';
 
 class App {
   constructor() {
@@ -140,10 +140,17 @@ class App {
 
   async startStreaming() {
     try {
-      await this.audioCapture.start((chunk) => {
-        const level = rms(chunk);
-        this.audioState.processVolume(level);
-        this.ui.updateIndicators(level, this.audioState.isSilent);
+      await this.audioCapture.start((chunk, sampleRate) => {
+        // Alimenta o VAD com amostras brutas
+        this.audioState.processAudio(chunk, sampleRate);
+
+        // Atualiza indicadores de nível/estado usando stats correntes
+        if (this.audioState.stats) {
+          this.ui.updateIndicators(this.audioState.stats.rms, this.audioState.isSilent);
+        }
+
+        // Sempre encaminhamos chunks para o segmentador;
+        // ele decide o que vira segmento com base no estado (start/stopSegment)
         this.segmenter.processChunk(chunk);
       });
       this.ui.setStatus(`Streaming audio with model ${this.config.get('model')}`);
