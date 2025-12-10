@@ -10,6 +10,7 @@ let mediaStream;
 let sourceNode;
 let isStreaming = false;
 let chunkId = 0;
+let silenceActive = false;
 
 function rms(buffer) {
   let sum = 0;
@@ -68,7 +69,14 @@ async function startAudioCapture() {
     const isSilent = level < state.threshold;
     updateIndicators(level, isSilent);
     pushLevel(level);
-    if (isSilent) return;
+    if (isSilent) {
+      if (!silenceActive && wsClient?.ws && wsClient.ws.readyState === WebSocket.OPEN) {
+        wsClient.ws.send(JSON.stringify({ type: 'silence' }));
+      }
+      silenceActive = true;
+      return;
+    }
+    silenceActive = false;
     if (wsClient?.ws && wsClient.ws.readyState === WebSocket.OPEN) {
       const view = new Float32Array(downsampled);
       const b64 = float32ToBase64(view);

@@ -3,6 +3,7 @@ import tempfile
 import threading
 import subprocess
 import socket
+import time
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -37,8 +38,6 @@ class WhisperServerProcess:
                 "127.0.0.1",
                 "-t",
                 str(self.threads),
-                "--print-progress",
-                "false",
             ]
             self.proc = subprocess.Popen(
                 cmd,
@@ -46,7 +45,9 @@ class WhisperServerProcess:
                 stderr=subprocess.STDOUT,
             )
         # wait for server to bind or die
-        for _ in range(30):
+        timeout = float(os.getenv("WHISPER_SERVER_START_TIMEOUT", "60"))
+        start_time = time.time()
+        while time.time() - start_time < timeout:
             if self.proc and self.proc.poll() is not None:
                 raise RuntimeError(f"whisper-server exited immediately, see log {log_file}")
             try:
@@ -54,8 +55,6 @@ class WhisperServerProcess:
                     return
             except Exception:
                 pass
-            import time
-
             time.sleep(0.2)
         raise RuntimeError(f"whisper-server did not start on port {self.port}, see log {log_file}")
 
@@ -137,7 +136,10 @@ class WhisperServerManager:
             tmp_path = Path(tmp.name)
         try:
             files = {"file": (tmp_path.name, tmp_path.open("rb"), "audio/wav")}
-            resp = self.session.post(f"http://127.0.0.1:{proc.port}/inference", files=files, timeout=120)
+            url = f"http://127.0.0.1:{proc.port}/inference"
+            print(f"[server-manager] POST {url} audio={tmp_path.name}")
+            resp = self.session.post(url, files=files, timeout=120)
+            print(f"[server-manager] Response {resp.status_code}: {resp.text[:200]}")
             resp.raise_for_status()
             return resp.json()
         finally:
@@ -147,11 +149,19 @@ class WhisperServerManager:
                 pass
 
     def transcribe_file(self, model_name: str, file_path: str) -> Dict:
-        proc = self._get_or_start(model_name)
-        files = {"file": (Path(file_path).name, open(file_path, "rb"), "audio/wav")}
-        resp = self.session.post(f"http://127.0.0.1:{proc.port}/inference", files=files, timeout=120)
-        resp.raise_for_status()
-        return resp.json()
+        data, sr = sf.read(file_path, always_2d=False)
+        if data.ndim > 1:
+            data = np.mean(data, axis=1)
+        if sr != 16000:
+            x_old = np.linspace(0, len(data) - 1, num=len(data))
+            x_new = np.linspace(0, len(data) - 1, num=int(len(data) * 16000 / sr))
+            data = np.interp(x_new, x_old, data)
+        data = data.astype(np.float32)
+        return self.transcribe_array(model_name, data)
+
+    def stop_all(self) -> None:
+        for proc in self.processes.values():
+            proc.stop()
 
 
 server_manager = WhisperServerManager()

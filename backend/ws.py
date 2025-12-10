@@ -125,6 +125,163 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             await websocket.send_text(json.dumps({"error": f"model load failed: {exc}"}))
             return None
 
+    async def process_audio_chunk(chunk: np.ndarray, chunk_id: Optional[str] = None) -> None:
+        nonlocal buffer, chunk_meta, energy_history, backlog_processed, cumulative_text, last_final_sent, last_infer, last_debug, engine_local, engine_task
+        if chunk.size == 0:
+            return
+        chunk_rms = float(np.sqrt(np.mean(np.square(chunk))))
+        energy_history.append(chunk_rms)
+        min_rms = min(energy_history) if energy_history else 0.0
+        max_rms = max(energy_history) if energy_history else 0.0
+        dyn_threshold = min_rms + (max_rms - min_rms) * voice_factor
+        voice_active = chunk_rms >= dyn_threshold and chunk_rms > 1e-5
+
+        start = buffer.size
+        buffer = np.concatenate((buffer, chunk))
+        end = start + chunk.size
+        if chunk_id:
+            chunk_meta.append((chunk_id, start, end))
+        if buffer.size > MAX_SAMPLES:
+            overflow = buffer.size - MAX_SAMPLES
+            buffer = buffer[-MAX_SAMPLES:]
+            if chunk_id:
+                new_meta = deque()
+                for mid, s, e in chunk_meta:
+                    s -= overflow
+                    e -= overflow
+                    if e <= 0:
+                        continue
+                    new_meta.append((mid, max(0, s), e))
+                chunk_meta = new_meta
+            else:
+                chunk_meta.clear()
+
+        now = time.time()
+        if engine_local is None and (now - last_debug) > 1.0:
+            last_debug = now
+            await websocket.send_text(
+                json.dumps(
+                    {
+                        "status": f"accumulating {buffer.size / SAMPLE_RATE:.2f}s waiting model",
+                        "buffer_seconds": buffer.size / SAMPLE_RATE,
+                        "type": "debug",
+                    }
+                )
+            )
+
+        if engine_local is None and engine_task.done():
+            engine_local = engine_task.result()
+            if engine_local is None:
+                logger.error("Model not loaded; engine_task returned None")
+                await websocket.send_text(json.dumps({"error": "model not loaded; check logs"}))
+                engine_task = asyncio.create_task(load_engine(current_model))
+                return
+
+        if engine_local and not backlog_processed and buffer.size >= min_samples_for_infer:
+            backlog_processed = True
+            loop = asyncio.get_event_loop()
+            try:
+                await websocket.send_text(
+                    json.dumps(
+                        {
+                            "status": f"processing backlog {buffer.size / SAMPLE_RATE:.2f}s",
+                            "type": "debug",
+                        }
+                    )
+                )
+                result = await loop.run_in_executor(
+                    None, engine_local.transcribe_array, np.copy(buffer), None
+                )
+                await websocket.send_text(
+                    json.dumps(
+                        {
+                            "status": f"backlog processed {buffer.size / SAMPLE_RATE:.2f}s",
+                            "type": "debug",
+                        }
+                    )
+                )
+                text = result.get("text", "")
+                if text:
+                    cumulative_text = text
+                    ids = [mid for (mid, s, e) in chunk_meta]
+                    await websocket.send_text(
+                        json.dumps({"type": "partial", "partial": text, "processed_ids": ids})
+                    )
+                    if cumulative_text != last_final_sent:
+                        last_final_sent = cumulative_text
+                        await websocket.send_text(
+                            json.dumps(
+                                {
+                                    "type": "final",
+                                    "final": cumulative_text,
+                                    "processed_ids": ids,
+                                    "status": "backlog processed",
+                                }
+                            )
+                        )
+            except Exception as exc:
+                logger.error("Backlog processing failed: %s", exc, exc_info=True)
+                await websocket.send_text(json.dumps({"error": str(exc)}))
+
+        now = time.time()
+        if (
+            buffer.size >= min_samples_for_infer
+            and (now - last_infer) >= infer_interval
+            and voice_active
+            and engine_local
+        ):
+            last_infer = now
+            audio_copy = np.copy(buffer[-window_samples:])
+            loop = asyncio.get_event_loop()
+            try:
+                await websocket.send_text(
+                    json.dumps(
+                        {
+                            "status": f"processing window {window_seconds:.2f}s",
+                            "type": "debug",
+                        }
+                    )
+                )
+                result = await loop.run_in_executor(
+                    None, engine_local.transcribe_array, audio_copy, None
+                )
+            except Exception as exc:
+                logger.error("Window processing failed: %s", exc, exc_info=True)
+                await websocket.send_text(json.dumps({"error": str(exc)}))
+                return
+            partial_text = result.get("text", "")
+            if partial_text:
+                if cumulative_text and partial_text.startswith(cumulative_text):
+                    cumulative_text = partial_text
+                elif cumulative_text in partial_text:
+                    cumulative_text = partial_text
+                else:
+                    cumulative_text = (cumulative_text + " " + partial_text).strip()
+                ids = []
+                if chunk_meta:
+                    window_start = max(buffer.size - window_samples, 0)
+                    window_end = buffer.size
+                    ids = [mid for (mid, s, e) in chunk_meta if e > window_start and s < window_end]
+                await websocket.send_text(
+                    json.dumps(
+                        {
+                            "type": "partial",
+                            "partial": partial_text,
+                            "processed_ids": ids,
+                            "window_seconds": window_seconds,
+                            "interval": infer_interval,
+                            "min_seconds": min_seconds,
+                            "rms": chunk_rms,
+                            "threshold": dyn_threshold,
+                        }
+                    )
+                )
+                if cumulative_text and cumulative_text != last_final_sent:
+                    last_final_sent = cumulative_text
+                    await websocket.send_text(
+                        json.dumps({"type": "final", "final": cumulative_text, "processed_ids": ids})
+                    )
+
     await send_models_message()
     engine_task = asyncio.create_task(load_engine(current_model))
     try:
@@ -158,24 +315,15 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     except Exception as exc:
                         logger.error("Failed to decode chunk %s: %s", cid, exc, exc_info=True)
                         continue
-                    if audio_bytes.size == 0:
-                        continue
-                    start = buffer.size
-                    buffer = np.concatenate((buffer, audio_bytes))
-                    end = start + audio_bytes.size
-                    chunk_meta.append((cid, start, end))
-                    if buffer.size > MAX_SAMPLES:
-                        overflow = buffer.size - MAX_SAMPLES
-                        buffer = buffer[-MAX_SAMPLES:]
-                        # adjust chunk_meta
-                        new_meta = deque()
-                        for mid, s, e in chunk_meta:
-                            s -= overflow
-                            e -= overflow
-                            if e <= 0:
-                                continue
-                            new_meta.append((mid, max(0, s), e))
-                        chunk_meta = new_meta
+                    await process_audio_chunk(audio_bytes, cid)
+                    continue
+                elif ctype == "silence":
+                    buffer = np.zeros(0, dtype=np.float32)
+                    chunk_meta.clear()
+                    backlog_processed = False
+                    last_infer = 0.0
+                    cumulative_text = ""
+                    last_final_sent = ""
                     continue
                 if ctype == "select_model":
                     new_model = control.get("model") or current_model
@@ -225,151 +373,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 continue
 
             chunk = np.frombuffer(data, dtype=np.float32)
-            if chunk.size == 0:
-                continue
-
-            chunk_rms = float(np.sqrt(np.mean(np.square(chunk))))
-            energy_history.append(chunk_rms)
-            min_rms = min(energy_history) if energy_history else 0.0
-            max_rms = max(energy_history) if energy_history else 0.0
-            dyn_threshold = min_rms + (max_rms - min_rms) * voice_factor
-            voice_active = chunk_rms >= dyn_threshold and chunk_rms > 1e-5
-
-            buffer = np.concatenate((buffer, chunk))
-            if buffer.size > MAX_SAMPLES:
-                buffer = buffer[-MAX_SAMPLES:]
-                # when raw bytes path used, cannot map IDs; clear meta
-                chunk_meta.clear()
-
-            now = time.time()
-            if engine_local is None and (now - last_debug) > 1.0:
-                last_debug = now
-                await websocket.send_text(
-                    json.dumps(
-                        {
-                            "status": f"accumulating {buffer.size / SAMPLE_RATE:.2f}s waiting model",
-                            "buffer_seconds": buffer.size / SAMPLE_RATE,
-                            "type": "debug",
-                        }
-                    )
-                )
-
-            # If engine finished loading, capture it
-            if engine_local is None and engine_task.done():
-                engine_local = engine_task.result()
-                if engine_local is None:
-                    logger.error("Model not loaded; engine_task returned None")
-                    await websocket.send_text(json.dumps({"error": "model not loaded; check logs"}))
-                    # stay connected so client can retry/select another model
-                    engine_task = asyncio.create_task(load_engine(current_model))
-                    continue
-
-            # Process backlog once after engine ready
-            if engine_local and not backlog_processed and buffer.size >= min_samples_for_infer:
-                backlog_processed = True
-                loop = asyncio.get_event_loop()
-                try:
-                    await websocket.send_text(
-                        json.dumps(
-                            {
-                                "status": f"processing backlog {buffer.size / SAMPLE_RATE:.2f}s",
-                                "type": "debug",
-                            }
-                        )
-                    )
-                    result = await loop.run_in_executor(
-                        None, engine_local.transcribe_array, np.copy(buffer), None
-                    )
-                    await websocket.send_text(
-                        json.dumps(
-                            {
-                                "status": f"backlog processed {buffer.size / SAMPLE_RATE:.2f}s",
-                                "type": "debug",
-                            }
-                        )
-                    )
-                    text = result.get("text", "")
-                    if text:
-                        cumulative_text = text
-                        ids = [mid for (mid, s, e) in chunk_meta]
-                        await websocket.send_text(
-                            json.dumps({"type": "partial", "partial": text, "processed_ids": ids})
-                        )
-                        if cumulative_text != last_final_sent:
-                            last_final_sent = cumulative_text
-                            await websocket.send_text(
-                                json.dumps(
-                                    {
-                                        "type": "final",
-                                        "final": cumulative_text,
-                                        "processed_ids": ids,
-                                        "status": "backlog processed",
-                                    }
-                                )
-                            )
-                except Exception as exc:
-                    logger.error("Backlog processing failed: %s", exc, exc_info=True)
-                    await websocket.send_text(json.dumps({"error": str(exc)}))
-
-            now = time.time()
-            if (
-                buffer.size >= min_samples_for_infer
-                and (now - last_infer) >= infer_interval
-                and voice_active
-                and engine_local
-            ):
-                last_infer = now
-                # Use the most recent window to keep latency low.
-                audio_copy = np.copy(buffer[-window_samples:])
-                loop = asyncio.get_event_loop()
-                try:
-                    await websocket.send_text(
-                        json.dumps(
-                            {
-                                "status": f"processing window {window_seconds:.2f}s",
-                                "type": "debug",
-                            }
-                        )
-                    )
-                    result = await loop.run_in_executor(
-                        None, engine_local.transcribe_array, audio_copy, None
-                    )
-                except Exception as exc:  # pragma: no cover - safeguard
-                    logger.error("Window processing failed: %s", exc, exc_info=True)
-                    await websocket.send_text(json.dumps({"error": str(exc)}))
-                    continue
-                partial_text = result.get("text", "")
-                if partial_text:
-                    if cumulative_text and partial_text.startswith(cumulative_text):
-                        cumulative_text = partial_text
-                    elif cumulative_text in partial_text:
-                        cumulative_text = partial_text
-                    else:
-                        cumulative_text = (cumulative_text + " " + partial_text).strip()
-                    ids = []
-                    if chunk_meta:
-                        window_start = max(buffer.size - window_samples, 0)
-                        window_end = buffer.size
-                        ids = [mid for (mid, s, e) in chunk_meta if e > window_start and s < window_end]
-                    await websocket.send_text(
-                        json.dumps(
-                            {
-                                "type": "partial",
-                                "partial": partial_text,
-                                "processed_ids": ids,
-                                "window_seconds": window_seconds,
-                                "interval": infer_interval,
-                                "min_seconds": min_seconds,
-                                "rms": chunk_rms,
-                                "threshold": dyn_threshold,
-                            }
-                        )
-                    )
-                    if cumulative_text and cumulative_text != last_final_sent:
-                        last_final_sent = cumulative_text
-                        await websocket.send_text(
-                            json.dumps({"type": "final", "final": cumulative_text, "processed_ids": ids})
-                        )
+            await process_audio_chunk(chunk)
     except WebSocketDisconnect:
         pass
     except Exception as exc:  # pragma: no cover - runtime protection
