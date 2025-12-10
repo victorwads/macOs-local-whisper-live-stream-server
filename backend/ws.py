@@ -144,10 +144,27 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     await send_models_message()
     engine_task = asyncio.create_task(load_engine(current_model))
 
+    # Create a persistent receive task
+    receive_task = asyncio.create_task(websocket.receive())
+
     try:
         while True:
             try:
-                message = await websocket.receive()
+                # Wait for message OR timeout (inactivity)
+                done, pending = await asyncio.wait([receive_task], timeout=min_seconds)
+
+                if receive_task in done:
+                    # Message received
+                    message = receive_task.result()
+                    
+                    # Prepare next receive task immediately
+                    receive_task = asyncio.create_task(websocket.receive())
+                else:
+                    # Timeout occurred (inactivity)
+                    # If we have data in buffer, flush it now
+                    await segmenter.flush()
+                    continue
+
             except WebSocketDisconnect:
                 break
             except RuntimeError as exc:

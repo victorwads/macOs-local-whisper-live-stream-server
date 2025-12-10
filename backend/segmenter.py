@@ -16,14 +16,14 @@ class AudioSegmenter:
         
         current_duration = self.buffer.size / self.sample_rate
         if current_duration >= self.max_seconds:
-            await self._process()
+            await self.flush()
 
     async def notify_silence(self):
         current_duration = self.buffer.size / self.sample_rate
         if current_duration >= self.min_seconds:
-            await self._process()
+            await self.flush()
 
-    async def _process(self):
+    async def flush(self):
         if self.buffer.size == 0:
             return
         # Copy buffer to ensure we don't modify it if the callback is slow/async
