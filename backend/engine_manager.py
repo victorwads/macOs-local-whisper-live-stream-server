@@ -24,8 +24,8 @@ def _make_engine(model_size: str):
             def __init__(self, name: str):
                 self.model_size = name
 
-            def transcribe_array(self, audio, language=None):
-                return server_manager.transcribe_array(self.model_size, audio, language=language)
+            def transcribe_array(self, audio, language=None, is_partial=False):
+                return server_manager.transcribe_array(self.model_size, audio, language=language, is_partial=is_partial)
 
             def transcribe_file(self, file_path, language=None):
                 return server_manager.transcribe_file(self.model_size, file_path, language=language)

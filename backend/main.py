@@ -1,11 +1,12 @@
 import asyncio
 import logging
 import os
+import shutil
 import tempfile
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -17,6 +18,7 @@ from engine_manager import (
     installed_models,
     supported_models,
 )
+from whisper_server_client import server_manager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -41,6 +43,29 @@ async def load_model() -> None:
         logger.info("Whisper model loaded and ready.")
     except FileNotFoundError:
         logger.info("Model %s not found at startup; will load on demand.", DEFAULT_MODEL)
+
+
+@app.get("/servers")
+async def list_servers(request: Request) -> dict:
+    """Listar servidores Whisper em execução gerenciados pelo server_manager."""
+    servers = server_manager.running_servers()
+    results = {}
+    for name, info in servers.items():
+        server_info = info.copy()
+        server_info["stop_url"] = str(request.url_for("stop_server", model_name=name))
+        results[name] = server_info
+    return {"servers": results}
+
+
+@app.get("/servers/{model_name}/stop")
+async def stop_server(model_name: str) -> dict:
+    """Encerrar o servidor Whisper associado a um determinado modelo."""
+    try:
+        if not server_manager.stop_server(model_name):
+            raise HTTPException(status_code=404, detail="Server not found or not running")
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return {"status": "stopped", "model": model_name}
 
 
 @app.get("/health")
@@ -68,17 +93,16 @@ async def transcribe(
         raise HTTPException(status_code=400, detail="Missing filename")
 
     suffix = Path(file.filename).suffix or ".wav"
-    try:
-        contents = await file.read()
-    except Exception as exc:  # pragma: no cover - FastAPI handles validation
-        raise HTTPException(status_code=400, detail=f"Failed to read file: {exc}") from exc
-
-    if not contents:
-        raise HTTPException(status_code=400, detail="File is empty")
-
+    
+    # Use tempfile to avoid loading entire file into RAM
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp.write(contents)
-        temp_path = tmp.name
+        try:
+            # Stream file content to disk
+            shutil.copyfileobj(file.file, tmp)
+            temp_path = tmp.name
+        except Exception as exc:
+            os.unlink(tmp.name)
+            raise HTTPException(status_code=400, detail=f"Failed to save upload: {exc}") from exc
 
     try:
         loop = asyncio.get_event_loop()

@@ -266,7 +266,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             return
 
         now = time.time() * 1000
-        if now - last_partial_time < partial_interval_ms:
+        time_diff = now - last_partial_time
+        if time_diff < partial_interval_ms:
             return
 
         # Check if we have enough audio in buffer to try a partial
@@ -283,8 +284,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
              if engine_task.done():
                  engine_local = engine_task.result()
              else:
+                 logger.info("Partial skipped: Engine not ready")
                  return
 
+        logger.info(f"Running partial: buffer={current_size/SAMPLE_RATE:.2f}s, interval={time_diff:.0f}ms")
         last_partial_time = now
         
         # Capture segment ID to verify validity later
@@ -298,7 +301,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             # Run in executor to avoid blocking
             start_time = time.time()
             result = await loop.run_in_executor(
-                None, engine_local.transcribe_array, audio_copy, current_language
+                None, lambda: engine_local.transcribe_array(audio_copy, current_language, is_partial=True)
             )
             process_time = time.time() - start_time
             audio_duration = audio_copy.size / SAMPLE_RATE
@@ -313,6 +316,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
             if text:
                 last_processed_size = current_size
+                logger.info(f"Partial result: '{text}' ({process_time*1000:.0f}ms)")
                 await websocket.send_text(json.dumps({
                     "type": "partial",
                     "text": text,
@@ -321,8 +325,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         "processing_time": process_time
                     }
                 }))
-        except Exception:
-            # Partial failures shouldn't kill the connection
+            else:
+                logger.info("Partial result empty or ignored")
+        except Exception as e:
+            logger.error(f"Partial failed: {e}")
             pass
 
     await send_models_message()
@@ -399,7 +405,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     if "bytes" in message and message["bytes"]:
                         chunk = np.frombuffer(message["bytes"], dtype=np.float32)
                         await segmenter.push_audio_chunk(chunk)
-
+                        # logger.info(f"Received chunk: {len(chunk)} samples") # Too verbose for every chunk? Maybe debug level.
+                        
                 else:
                     # Timeout occurred
                     # Check if it's a silence timeout
