@@ -25,7 +25,7 @@ export class AudioCapture {
       // 2048 ~= 128ms at 16kHz, good for speech
       // 4096 ~= 256ms at 16kHz, good balance
       // 8192 ~= 512ms at 16kHz, higher latency but fewer callbacks
-      this.processor = this.audioCtx.createScriptProcessor(4096, 1, 1);
+      this.processor = this.audioCtx.createScriptProcessor(2048, 1, 1);
 
       this.processor.onaudioprocess = (event) => {
         const input = event.inputBuffer.getChannelData(0);

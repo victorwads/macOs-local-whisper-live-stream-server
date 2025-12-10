@@ -3,6 +3,7 @@ import json
 import time
 import os
 import logging
+import unicodedata
 from collections import deque
 from typing import Optional
 
@@ -51,6 +52,44 @@ CODE_TO_NAME = {
     "tg": "Tajik", "tt": "Tatar", "cr": "Cree", "bo": "Tibetan",
 }
 
+
+def _is_latin_like(ch: str) -> bool:
+    """Return True if the character belongs to a Latin-based script.
+
+    This covers English and Portuguese (and most western languages) by
+    checking the Unicode name for the substring 'LATIN'.
+    """
+
+    try:
+        return "LATIN" in unicodedata.name(ch)
+    except ValueError:
+        # Character without a name
+        return False
+
+
+def should_ignore_non_latin(text: str, allow_non_latin: bool) -> bool:
+    """Decide if a transcription should be ignored for being only non‑Latin.
+
+    If there is at least one alphabetic character and none of them is
+    Latin-based (so the whole phrase is, e.g., Cyrillic or CJK) and
+    allow_non_latin is False, we ignore this text.
+    """
+
+    if allow_non_latin:
+        return False
+
+    has_letter = False
+    has_latin = False
+
+    for ch in text:
+        if ch.isalpha():
+            has_letter = True
+            if _is_latin_like(ch):
+                has_latin = True
+                break
+
+    return has_letter and not has_latin
+
 def normalize_language(lang: str) -> str:
     if not lang:
         return None
@@ -92,6 +131,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     current_language = "auto"
     partial_interval_ms = 500  # Default 500ms
     last_partial_time = 0
+    # If False, texts composed only of non‑Latin letters (e.g. Cyrillic)
+    # will be ignored by default. Can be overridden by env or set_params.
+    allow_non_latin = os.getenv("ALLOW_NON_LATIN", "0") == "1"
     
     # State for partial processing
     current_segment_id = 0
@@ -192,11 +234,15 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             process_time = time.time() - start_time
             audio_duration = audio_segment.size / SAMPLE_RATE
             text = (result.get("text") or "").strip()
-            
+
             # Filter out common hallucination
             if text in IGNORED_TEXTS:
                 text = ""
-                
+
+            # Ignore segments that are purely non‑Latin unless explicitly allowed
+            if text and should_ignore_non_latin(text, allow_non_latin):
+                text = ""
+
             if text:
                 final_history.append(text)
                 await websocket.send_text(json.dumps({
@@ -257,8 +303,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             process_time = time.time() - start_time
             audio_duration = audio_copy.size / SAMPLE_RATE
             text = (result.get("text") or "").strip()
-            
+
             if text in IGNORED_TEXTS:
+                text = ""
+
+            # Ignore partials that are purely non‑Latin unless explicitly allowed
+            if text and should_ignore_non_latin(text, allow_non_latin):
                 text = ""
 
             if text:
@@ -343,6 +393,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                                 }))
                             if "partial_interval" in control:
                                 partial_interval_ms = float(control["partial_interval"])
+                            if "allow_non_latin" in control:
+                                allow_non_latin = bool(control["allow_non_latin"])
 
                     if "bytes" in message and message["bytes"]:
                         chunk = np.frombuffer(message["bytes"], dtype=np.float32)

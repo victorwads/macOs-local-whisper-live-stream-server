@@ -69,22 +69,16 @@
       <!-- Audio Stats -->
       <div class="indicators" style="margin-top: 8px; background: #f0fdf4; border-color: #bbf7d0;">
         <div class="indicator-item">
-            <strong>Min Vol:</strong> <span id="statMinVol">--</span>
-        </div>
-        <div class="indicator-item">
-            <strong>Max Vol:</strong> <span id="statMaxVol">--</span>
-        </div>
-        <div class="indicator-item">
-            <strong>Avg Vol:</strong> <span id="statAvgVol">--</span>
-        </div>
-        <div class="indicator-item">
-            <strong>Avg Diff:</strong> <span id="statAvgDiff">--</span>
-        </div>
-        <div class="indicator-item">
           <strong>RMS:</strong> <span id="statRms">--</span>
         </div>
         <div class="indicator-item">
           <strong>ZCR:</strong> <span id="statZcr">--</span>
+        </div>
+        <div class="indicator-item">
+          <strong>RMS (smooth):</strong> <span id="statSmoothedRms">--</span>
+        </div>
+        <div class="indicator-item">
+          <strong>ZCR (smooth):</strong> <span id="statSmoothedZcr">--</span>
         </div>
         <div class="indicator-item">
           <strong>Noise Floor:</strong> <span id="statNoiseFloor">--</span>
@@ -97,6 +91,15 @@
         </div>
         <div class="indicator-item">
           <strong>Is Speech:</strong> <span id="statIsSpeech">--</span>
+        </div>
+        <div class="indicator-item">
+          <strong>Score (smooth):</strong> <span id="statSmoothedSpeechScore">--</span>
+        </div>
+        <div class="indicator-item">
+          <strong>Pitch (Hz):</strong> <span id="statPitchHz">--</span>
+        </div>
+        <div class="indicator-item">
+          <strong>Is Silent:</strong> <span id="statIsSilent">--</span>
         </div>
       </div>
       
