@@ -1,0 +1,5 @@
+# input/
+# output/
+tts_env/
+*.wav
+*.txt

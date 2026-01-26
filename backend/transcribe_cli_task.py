@@ -27,9 +27,28 @@ def main():
     model_size = "large-v3-turbo-q5_0"
     downloads_dir = os.path.expanduser("~/Downloads")
     
-    # 2. Find latest file
+    # 3. Ensure model exists (Download once)
+    print(f"Ensuring model {model_size} is downloaded...")
     try:
-        # Get all files, filter out hidden files and non-audio extensions if possible, but mainly hidden
+        download_cpp_model(model_size)
+    except Exception as e:
+        print(f"Error downloading model: {e}")
+        return
+
+    # Check for binary
+    whisper_bin = os.path.abspath("backend/whisper.cpp/build/bin/whisper-cli")
+    if not os.path.exists(whisper_bin):
+            whisper_bin = os.path.abspath("backend/whisper.cpp/build/bin/main")
+    
+    model_path = os.path.abspath(f"backend/models/cpp/ggml-{model_size}.bin")
+    
+    if not os.path.exists(whisper_bin):
+        print(f"Error: Whisper binary not found at {whisper_bin}")
+        return
+
+    # 2. Find all audio files
+    try:
+        # Get all files, filter out hidden files and non-audio extensions
         all_files = [os.path.join(downloads_dir, f) for f in os.listdir(downloads_dir)]
         valid_files = []
         for f in all_files:
@@ -38,8 +57,8 @@ def main():
             filename = os.path.basename(f)
             if filename.startswith("."):
                 continue
-            # Basic audio/video extension filter to avoid picking up random binary files
-            if not filename.lower().endswith(('.m4a', '.mp3', '.wav', '.mp4', '.mov', '.mk4', '.ogg')):
+            # Basic audio/video extension filter
+            if not filename.lower().endswith(('.m4a', '.mp3', '.wav', '.ogg')):
                 continue
             valid_files.append(f)
             
@@ -47,74 +66,74 @@ def main():
             print("No audio/video files found in Downloads.")
             return
         
-        latest_file = max(valid_files, key=os.path.getctime)
-        print(f"File to transcribe: {latest_file}")
+        # Sort by date (newest first)
+        valid_files.sort(key=os.path.getctime, reverse=True)
+        
+        print(f"Found {len(valid_files)} audio files in Downloads.")
+        
+        # Create output directory based on model name
+        transcription_dir = os.path.join(downloads_dir, model_size)
+        os.makedirs(transcription_dir, exist_ok=True)
+        print(f"Output directory: {transcription_dir}")
+        print("--------------------------------------------------")
+
+        for i, audio_file in enumerate(valid_files):
+            filename = os.path.basename(audio_file)
+            
+            # Target output identifier (whisper adds .txt automatically)
+            output_base_path = os.path.join(transcription_dir, filename)
+            expected_output_txt = f"{output_base_path}.txt"
+            
+            # Check if transcription already exists
+            if os.path.exists(expected_output_txt):
+                print(f"[{i+1}/{len(valid_files)}] Skipping '{filename}' (Transcription exists in {model_size}/)")
+                continue
+            
+            print(f"\n[{i+1}/{len(valid_files)}] Processing: '{filename}'")
+            
+            # 4. Convert audio
+            wav_path = "temp_transcription.wav"
+            try:
+                convert_to_wav16(audio_file, wav_path)
+            except Exception as e:
+                print(f"Error converting file (ffmpeg required): {e}")
+                continue
+
+            # 5. Transcribe
+            print("Starting transcription... (this may take a while for large files)")
+            try:
+                cmd = [
+                    whisper_bin,
+                    "-m", model_path,
+                    "-f", wav_path,
+                    "-l", "auto",
+                    "-otxt",           
+                    "-of", output_base_path, 
+                    "--print-colors"   
+                ]
+                
+                # Allow stderr/stdout to pass through directly
+                result_proc = subprocess.run(cmd)
+                
+                if result_proc.returncode != 0:
+                    print(f"Error: Whisper failed with code {result_proc.returncode}")
+                else:
+                    if os.path.exists(expected_output_txt):
+                        print(f"✅ Transcription saved to: {expected_output_txt}")
+                    else:
+                        print(f"⚠️ Warning: Output file not found: {expected_output_txt}")
+
+            except Exception as e:
+                print(f"Unexpected error: {e}")
+            finally:
+                if os.path.exists(wav_path):
+                    os.remove(wav_path)
+            
+            print("--------------------------------------------------")
+
     except Exception as e:
-        print(f"Error finding latest file: {e}")
+        print(f"Error in main loop: {e}")
         return
-
-    # 3. Ensure model exists
-    print(f"Ensuring model {model_size} is downloaded...")
-    try:
-        download_cpp_model(model_size)
-    except Exception as e:
-        print(f"Error downloading model: {e}")
-        return
-
-    # 4. Convert audio
-    wav_path = "temp_transcription.wav"
-    try:
-        convert_to_wav16(latest_file, wav_path)
-    except Exception as e:
-        print(f"Error converting file (ffmpeg required): {e}")
-        return
-
-    # 5. Transcribe
-    print("Starting transcription... (this may take a while for large files)")
-    try:
-        # Usando o binário direto para garantir que o arquivo .txt seja salvo corretamente
-        # e para mostrar o progresso real no terminal.
-        whisper_bin = os.path.abspath("backend/whisper.cpp/build/bin/whisper-cli")
-        if not os.path.exists(whisper_bin):
-             whisper_bin = os.path.abspath("backend/whisper.cpp/build/bin/main")
-        
-        model_path = os.path.abspath(f"backend/models/cpp/ggml-{model_size}.bin")
-        
-        if not os.path.exists(whisper_bin):
-            print(f"Error: Whisper binary not found at {whisper_bin}")
-            return
-
-        cmd = [
-            whisper_bin,
-            "-m", model_path,
-            "-f", wav_path,
-            "-l", "auto",
-            "-otxt",           
-            "-of", str(latest_file), 
-            "--print-colors"   
-        ]
-        
-        print(f"Running command: {' '.join(cmd)}")
-        # Allow stderr/stdout to pass through directly
-        result_proc = subprocess.run(cmd)
-        
-        if result_proc.returncode != 0:
-            print(f"Error: Whisper failed with code {result_proc.returncode}")
-            return
-        
-        output_txt = f"{latest_file}.txt"
-        if os.path.exists(output_txt):
-            print(f"\n✅ Transcription saved successfully to:\n{output_txt}")
-        else:
-            print(f"\n⚠️ Warning: Could not verify if {output_txt} was created.")
-
-    except subprocess.CalledProcessError as e:
-        print(f"Error during transcription process: {e}")
-    except Exception as e:
-        print(f"Unexpected error: {e}")
-    finally:
-        if os.path.exists(wav_path):
-            os.remove(wav_path)
 
 if __name__ == "__main__":
     main()
