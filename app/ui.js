@@ -200,16 +200,22 @@ export class UIManager {
     }
   }
 
-  updateModelSelect({ supported, installed, current, def }) {
+  updateModelSelect({ supported, installed, current, def, installed_info }) {
     const models = supported.length ? supported : Array.from(new Set(installed || []));
     if (!models.length) return;
+    const installedInfo = installed_info || {};
     
     if (this.dom.modelSelect) {
       this.dom.modelSelect.innerHTML = '';
       models.forEach((m) => {
         const opt = document.createElement('option');
         opt.value = m;
-        opt.textContent = `${m}${installed.includes(m) ? ' (installed)' : ''}`;
+        const isInstalled = installed.includes(m);
+        const sizeGb = installedInfo?.[m]?.size_gb;
+        const sizeLabel = isInstalled && Number.isFinite(sizeGb)
+          ? ` - ${sizeGb < 1 ? sizeGb.toFixed(2) : sizeGb.toFixed(1)} GB`
+          : '';
+        opt.textContent = `${m}${isInstalled ? ` (installed${sizeLabel})` : ''}`;
         if (m === current) opt.selected = true;
         this.dom.modelSelect.appendChild(opt);
       });

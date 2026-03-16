@@ -3,7 +3,7 @@ import { UIManager } from './ui.js';
 import { AudioCapture } from './audioCapture.js';
 import { AudioStateManager } from './audioState.js';
 import { AudioSegmenter } from './audioSegmenter.js';
-import { WSClient } from './wsClient.js';
+import { createBackendClient } from './backendClient.js';
 import { encodeWAV } from './utils.js';
 import { appendTranscriptItem, clearTranscriptStorage, loadTranscriptItems } from './storage.js';
 
@@ -21,7 +21,7 @@ export class App {
       minSpeak: this.config.get('minSpeak'),
       minSilence: this.config.get('minSilence')
     });
-    this.ws = new WSClient();
+    this.backend = createBackendClient('ws');
     this.transcriptItems = [];
     this.lapCount = 0;
     this.lastFinalText = '';
@@ -33,7 +33,7 @@ export class App {
   init() {
     this.setupEvents();
     this.hydrateTranscript();
-    this.ws.connect().catch(err => {
+    this.backend.connect().catch(err => {
       this.ui.setStatus('Failed to connect to backend: ' + err.message);
     });
   }
@@ -71,18 +71,10 @@ export class App {
         this.segmenter.updateConfig('minSpeak', newMinSpeak);
         
         // 2. Send new params to backend
-        this.ws.sendControl({
-          type: 'set_params',
-          window: this.config.get('window'),
-          interval: this.config.get('interval'),
-          min_seconds: Math.min(0.5, this.config.get('window')),
-          max_seconds: this.config.get('maxSeconds'),
-          language: this.config.get('language'),
-          partial_interval: this.config.get('partialIntervalMin'),
-        });
+        this.backend.setParams(this.buildBackendParams());
         
         // 3. Send select_model
-        this.ws.sendControl({ type: 'select_model', model: value });
+        this.backend.selectModel(value);
         
         // 4. Update UI inputs (because they might have old values)
         this.ui.updateInputs(); 
@@ -92,15 +84,7 @@ export class App {
         
         // Send params to backend if needed
         if (['window', 'interval', 'language', 'partialIntervalMin', 'partialIntervalMax', 'maxSeconds'].includes(key)) {
-          this.ws.sendControl({
-            type: 'set_params',
-            window: this.config.get('window'),
-            interval: this.config.get('interval'),
-            min_seconds: Math.min(0.5, this.config.get('window')),
-            max_seconds: this.config.get('maxSeconds'),
-            language: this.config.get('language'),
-            partial_interval: this.config.get('partialIntervalMin'),
-          });
+          this.backend.setParams(this.buildBackendParams());
         }
       }
     });
@@ -118,7 +102,7 @@ export class App {
       if (isSilent) {
         // Speech Ended
         this.segmenter.stopSegment();
-        this.ws.sendControl({ type: 'silence' });
+        this.backend.sendSilence();
         this.ui.addLog(`Silence detected (triggered after ${triggerDuration}ms), sent to server`);
       } else {
         // Speech Started
@@ -131,7 +115,7 @@ export class App {
 
     // Audio Segmenter Events
     this.segmenter.subscribe('chunkReady', (chunk) => {
-      this.ws.sendAudio(chunk);
+      this.backend.sendAudio(chunk);
     });
 
     this.segmenter.subscribe('segmentReady', ({ audio, duration }) => {
@@ -142,25 +126,17 @@ export class App {
     });
 
     // WebSocket Events
-    this.ws.subscribe('open', () => {
+    this.backend.subscribe('open', () => {
       this.ui.setStatus('Connected to backend');
-      this.ws.sendControl({
-        type: 'set_params',
-        window: this.config.get('window'),
-        interval: this.config.get('interval'),
-        min_seconds: Math.min(0.5, this.config.get('window')),
-        max_seconds: this.config.get('maxSeconds'),
-        language: this.config.get('language'),
-        partial_interval: this.config.get('partialIntervalMin'),
-      });
-      this.ws.sendControl({ type: 'select_model', model: this.config.get('model') });
-      this.ws.sendControl({ type: 'request_models' });
+      this.backend.setParams(this.buildBackendParams());
+      this.backend.selectModel(this.config.get('model'));
+      this.backend.requestModels();
     });
 
-    this.ws.subscribe('close', () => this.ui.setStatus('WebSocket closed'));
-    this.ws.subscribe('error', () => this.ui.setStatus('WebSocket error'));
+    this.backend.subscribe('close', () => this.ui.setStatus('WebSocket closed'));
+    this.backend.subscribe('error', () => this.ui.setStatus('WebSocket error'));
     
-    this.ws.subscribe('message', (data) => {
+    this.backend.subscribe('message', (data) => {
       if (data.type === 'models') {
         this.ui.updateModelSelect(data);
       }
@@ -209,7 +185,7 @@ export class App {
     this.pushTranscriptItem(lapItem);
     this.currentLapId = this.generateLapId();
     this.ui.setPartial('');
-    this.ws.sendControl({ type: 'silence' });
+    this.backend.sendSilence();
   }
 
   createTranscriptItem(type, text, lapId = this.currentLapId) {
@@ -276,6 +252,17 @@ export class App {
     this.ui.addLog('Transcript storage cleared.');
   }
 
+  buildBackendParams() {
+    return {
+      window: this.config.get('window'),
+      interval: this.config.get('interval'),
+      min_seconds: Math.min(0.5, this.config.get('window')),
+      max_seconds: this.config.get('maxSeconds'),
+      language: this.config.get('language'),
+      partial_interval: this.config.get('partialIntervalMin'),
+    };
+  }
+
   async startStreaming() {
     try {
       this.currentLapId = this.generateLapId();
@@ -301,10 +288,10 @@ export class App {
   stopStreaming() {
     this.audioCapture.stop();
     this.segmenter.stopSegment(); // Ensure any pending segment is finalized
-    this.ws.disconnect();
+    this.backend.disconnect();
     this.ui.setStatus('Stopped.');
     // Reconnect WS for control messages (status, etc) without streaming audio
-    setTimeout(() => this.ws.connect(), 500);
+    setTimeout(() => this.backend.connect(), 500);
   }
 }
 

@@ -20,6 +20,7 @@ export interface UIModelPayload {
   installed: string[];
   current: string;
   def?: string;
+  installed_info?: Record<string, { size_bytes: number; size_gb: number }>;
 }
 
 export interface UIConfigLike {

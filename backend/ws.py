@@ -10,7 +10,14 @@ from typing import Optional
 import numpy as np
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from engine_manager import DEFAULT_MODEL, ensure_engine, installed_models, supported_models, BACKEND
+from engine_manager import (
+    DEFAULT_MODEL,
+    ensure_engine,
+    installed_models,
+    installed_models_info,
+    supported_models,
+    BACKEND,
+)
 from download_model import fetch_model
 from cpp_model import download_cpp_model
 from whisper_server_client import server_manager
@@ -167,6 +174,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     "type": "models",
                     "supported": supported_models(),
                     "installed": installed_models(),
+                    "installed_info": installed_models_info(),
                     "default": DEFAULT_MODEL,
                     "current": current_model,
                 }

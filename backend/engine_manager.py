@@ -1,7 +1,7 @@
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 from download_model import SUPPORTED, fetch_model
 from cpp_model import download_cpp_model
@@ -44,19 +44,54 @@ def get_engine(model_size: Optional[str] = None):
 
 
 def installed_models() -> List[str]:
-    installed: List[str] = []
-    try:
-        installed.extend(WhisperEngine.available_models())
-    except Exception:
-        pass
-    cpp_dir = Path(os.getenv("WHISPER_MODELS_DIR") or Path(__file__).resolve().parent / "models") / "cpp"
+    return sorted(installed_models_info().keys())
+
+
+def installed_models_info() -> Dict[str, Dict[str, float]]:
+    info: Dict[str, Dict[str, float]] = {}
+
+    models_root = Path(os.getenv("WHISPER_MODELS_DIR") or Path(__file__).resolve().parent / "models")
+
+    faster_dir = models_root / "faster"
+    if faster_dir.exists():
+        for item in faster_dir.iterdir():
+            if item.is_dir():
+                size_bytes = _dir_size_bytes(item)
+                _upsert_model_info(info, item.name, size_bytes)
+            elif item.is_file() and item.name.startswith("ggml-") and item.suffix in {".bin", ".gguf"}:
+                _upsert_model_info(info, item.name, item.stat().st_size)
+
+    cpp_dir = models_root / "cpp"
     if cpp_dir.exists():
         for item in cpp_dir.iterdir():
             if item.is_file() and item.suffix == ".bin":
-                installed.append(item.name.replace("ggml-", "").replace(".bin", ""))
+                model_name = item.name.replace("ggml-", "").replace(".bin", "")
+                _upsert_model_info(info, model_name, item.stat().st_size)
             elif item.is_dir():
-                installed.append(item.name)
-    return sorted(set(installed))
+                _upsert_model_info(info, item.name, _dir_size_bytes(item))
+
+    return info
+
+
+def _upsert_model_info(info: Dict[str, Dict[str, float]], model_name: str, size_bytes: int) -> None:
+    current = info.get(model_name)
+    size_gb = round(size_bytes / (1024 ** 3), 3)
+    payload = {"size_bytes": int(size_bytes), "size_gb": size_gb}
+    if current is None or payload["size_bytes"] > int(current.get("size_bytes", 0)):
+        info[model_name] = payload
+
+
+def _dir_size_bytes(path: Path) -> int:
+    total = 0
+    for root, _, files in os.walk(path):
+        root_path = Path(root)
+        for file_name in files:
+            file_path = root_path / file_name
+            try:
+                total += file_path.stat().st_size
+            except OSError:
+                continue
+    return total
 
 
 def supported_models() -> List[str]:

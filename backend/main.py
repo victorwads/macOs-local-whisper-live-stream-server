@@ -17,6 +17,7 @@ from engine_manager import (
     available_models,
     ensure_engine,
     installed_models,
+    installed_models_info,
     supported_models,
 )
 from whisper_server_client import server_manager
@@ -87,6 +88,7 @@ async def health() -> dict:
 async def list_models() -> dict:
     return {
         "installed": installed_models(),
+        "installed_info": installed_models_info(),
         "supported": supported_models(),
         "default": DEFAULT_MODEL,
     }
