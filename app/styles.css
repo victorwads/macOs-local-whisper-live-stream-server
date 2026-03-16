@@ -119,6 +119,21 @@ button {
 
 button:hover { opacity: 0.9; }
 
+.shortcut-hint {
+    margin-left: 8px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    font-size: 0.75rem;
+    font-weight: 700;
+    opacity: 0.9;
+}
+
+.link-btn .shortcut-hint {
+    border-color: #93c5fd;
+    color: #1d4ed8;
+}
+
 #startBtn { background: var(--primary-color); color: white; }
 #lapBtn { background: var(--secondary-color); color: white; }
 #stopBtn { background: var(--danger-color); color: white; }
@@ -167,6 +182,11 @@ button:hover { opacity: 0.9; }
     box-sizing: border-box;
 }
 
+.transcript-container:focus {
+    outline: 2px solid #93c5fd;
+    outline-offset: 2px;
+}
+
 .transcript-final,
 .transcript-partial {
     display: block;
@@ -177,6 +197,17 @@ button:hover { opacity: 0.9; }
     align-items: baseline;
     gap: 10px;
     margin-bottom: 6px;
+    padding: 2px 4px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.transcript-line:hover {
+    background: #eff6ff;
+}
+
+.transcript-line-selected {
+    background: #dbeafe;
 }
 
 .transcript-ts {

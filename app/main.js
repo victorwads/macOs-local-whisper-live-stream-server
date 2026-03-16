@@ -57,6 +57,7 @@ export class App {
     this.ui.subscribe('stop', () => this.stopStreaming());
     this.ui.subscribe('clearStorage', () => this.resetTranscriptStorage());
     this.ui.subscribe('copyLastLap', () => this.copyLastLapToClipboard());
+    this.ui.subscribe('copyLine', ({ text }) => this.copyTranscriptLineToClipboard(text));
     this.ui.subscribe('configChange', ({ key, value }) => {
       this.config.set(key, value);
       
@@ -304,6 +305,17 @@ export class App {
     }
   }
 
+  async copyTranscriptLineToClipboard(text) {
+    const value = (text || '').trim();
+    if (!value) return;
+    const copied = await this.writeToClipboard(value);
+    if (copied) {
+      this.ui.addLog('Copied selected line to clipboard.');
+    } else {
+      this.ui.addLog('Clipboard copy failed.');
+    }
+  }
+
   async writeToClipboard(text) {
     try {
       if (navigator.clipboard?.writeText) {
@@ -413,7 +425,11 @@ export class App {
 
         // Atualiza indicadores de nível/estado usando stats correntes
         if (this.audioState.stats) {
-          this.ui.updateIndicators(this.audioState.stats.rms, this.audioState.isSilent);
+          this.ui.updateIndicators(
+            this.audioState.stats.rms,
+            this.audioState.isSilent,
+            this.audioState.stats.silenceDurationMs || 0
+          );
         }
 
         // Sempre encaminhamos chunks para o segmentador;

@@ -14,9 +14,9 @@
     <!-- Main Controls Card -->
     <div class="card">
       <div class="button-group">
-        <button id="startBtn" type="button">Start Mic</button>
-        <button id="lapBtn" type="button">Lap</button>
-        <button id="stopBtn" type="button">Stop</button>
+        <button id="startBtn" type="button" aria-keyshortcuts="Alt+S">Start Mic <span class="shortcut-hint">Alt+S</span></button>
+        <button id="lapBtn" type="button" aria-keyshortcuts="L Alt+L">Lap <span class="shortcut-hint">L / Alt+L</span></button>
+        <button id="stopBtn" type="button" aria-keyshortcuts="Alt+X">Stop <span class="shortcut-hint">Alt+X</span></button>
         <button id="clearStorageBtn" type="button">Clear Storage</button>
       </div>
 
@@ -79,6 +79,9 @@
             <strong>Partial Now:</strong> <span id="partialIntervalCurrentIndicator">--</span>
         </div>
         <div class="indicator-item">
+            <strong>Silence:</strong> <span id="silenceDurationIndicator">0 ms</span>
+        </div>
+        <div class="indicator-item">
             <strong>Suggested:</strong> <span id="suggestedIndicator">--</span>
         </div>
         <div class="indicator-item">
@@ -130,9 +133,9 @@
     <div class="card transcript-section">
       <div class="card-header card-header-row">
         <span>Live Transcription</span>
-        <button id="copyLastLapBtn" type="button" class="link-btn">Copy Last Lap</button>
+        <button id="copyLastLapBtn" type="button" class="link-btn" aria-keyshortcuts="Alt+C Control+C Meta+C">Copy Last Lap <span class="shortcut-hint">Alt+C</span></button>
       </div>
-      <div id="transcript" class="transcript-container">
+      <div id="transcript" class="transcript-container" tabindex="0" aria-label="Transcription area (Cmd/Ctrl+C copies last lap)">
         <div id="finalTranscript" class="transcript-final"></div>
         <div id="partialTranscript" class="transcript-partial"></div>
       </div>

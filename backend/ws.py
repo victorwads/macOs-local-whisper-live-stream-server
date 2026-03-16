@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import json
 import time
 import os
@@ -227,67 +228,83 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             await websocket.send_text(json.dumps({"error": f"model load failed: {exc}"}))
             return None
 
+    final_segments_queue: asyncio.Queue = asyncio.Queue()
+
     async def on_segment_ready(audio_segment: np.ndarray):
-        nonlocal engine_local, engine_task, current_segment_id, last_processed_size, last_processing_ms, partial_interval_current_ms
-        
-        # Invalidate current partials
+        nonlocal current_segment_id, last_processed_size, last_processing_ms, partial_interval_current_ms
+
+        # Invalidate current partials immediately when a final segment closes.
         current_segment_id += 1
+        segment_id = current_segment_id
         last_processed_size = 0
         last_processing_ms = 0.0
         partial_interval_current_ms = 0.0
-        
+
         if audio_segment.size == 0:
             return
-            
-        if engine_local is None:
-            if not engine_task.done():
-                await websocket.send_text(json.dumps({"status": "waiting for model load..."}))
-                try:
-                    engine_local = await engine_task
-                except Exception:
-                    pass
-            else:
-                engine_local = engine_task.result()
-                
-        if engine_local is None:
-             await websocket.send_text(json.dumps({"error": "Model failed to load"}))
-             return
 
-        loop = asyncio.get_event_loop()
-        try:
-            await websocket.send_text(json.dumps({"status": "transcribing segment"}))
-            start_time = time.time()
-            result = await loop.run_in_executor(
-                None, engine_local.transcribe_array, audio_segment, current_language
-            )
-            process_time = time.time() - start_time
-            audio_duration = audio_segment.size / SAMPLE_RATE
-            text = (result.get("text") or "").strip()
+        await final_segments_queue.put((segment_id, np.copy(audio_segment), current_language))
 
-            # Filter out common hallucination
-            if text in IGNORED_TEXTS:
-                text = ""
+    async def process_final_segments():
+        nonlocal engine_local, engine_task
 
-            # Ignore segments that are purely non‑Latin unless explicitly allowed
-            if text and should_ignore_non_latin(text, allow_non_latin):
-                text = ""
+        while True:
+            item = await final_segments_queue.get()
+            if item is None:
+                final_segments_queue.task_done()
+                break
 
-            if text:
-                final_history.append(text)
-                await websocket.send_text(json.dumps({
-                    "type": "final",
-                    "final": text,
-                    "history": final_history,
-                    "stats": {
-                        "audio_duration": audio_duration,
-                        "processing_time": process_time,
-                        "processing_time_ms": int(round(process_time * 1000)),
-                        "partial_interval_ms": int(round(partial_interval_current_ms)),
-                    }
-                }))
-        except Exception as exc:
-            logger.error("Transcription failed: %s", exc, exc_info=True)
-            await websocket.send_text(json.dumps({"error": str(exc)}))
+            _segment_id, audio_segment, language_for_segment = item
+
+            try:
+                if engine_local is None:
+                    if not engine_task.done():
+                        await websocket.send_text(json.dumps({"status": "waiting for model load..."}))
+                        try:
+                            engine_local = await engine_task
+                        except Exception:
+                            engine_local = None
+                    else:
+                        engine_local = engine_task.result()
+
+                if engine_local is None:
+                    await websocket.send_text(json.dumps({"error": "Model failed to load"}))
+                    continue
+
+                loop = asyncio.get_event_loop()
+                await websocket.send_text(json.dumps({"status": "transcribing segment"}))
+                start_time = time.time()
+                result = await loop.run_in_executor(
+                    None, engine_local.transcribe_array, audio_segment, language_for_segment
+                )
+                process_time = time.time() - start_time
+                audio_duration = audio_segment.size / SAMPLE_RATE
+                text = (result.get("text") or "").strip()
+
+                if text in IGNORED_TEXTS:
+                    text = ""
+
+                if text and should_ignore_non_latin(text, allow_non_latin):
+                    text = ""
+
+                if text:
+                    final_history.append(text)
+                    await websocket.send_text(json.dumps({
+                        "type": "final",
+                        "final": text,
+                        "history": final_history,
+                        "stats": {
+                            "audio_duration": audio_duration,
+                            "processing_time": process_time,
+                            "processing_time_ms": int(round(process_time * 1000)),
+                            "partial_interval_ms": int(round(partial_interval_current_ms)),
+                        }
+                    }))
+            except Exception as exc:
+                logger.error("Transcription failed: %s", exc, exc_info=True)
+                await websocket.send_text(json.dumps({"error": str(exc)}))
+            finally:
+                final_segments_queue.task_done()
 
     segmenter = AudioSegmenter(min_seconds, max_seconds, SAMPLE_RATE, on_segment_ready)
 
@@ -379,6 +396,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
     await send_models_message()
     engine_task = asyncio.create_task(load_engine(current_model))
+    final_processing_task = asyncio.create_task(process_final_segments())
 
     # Create a persistent receive task
     receive_task = asyncio.create_task(websocket.receive())
@@ -443,6 +461,14 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                                 current_segment_id += 1
                                 last_processed_size = 0
                                 
+                                # Drop queued segments from the old model/context.
+                                while not final_segments_queue.empty():
+                                    try:
+                                        final_segments_queue.get_nowait()
+                                        final_segments_queue.task_done()
+                                    except asyncio.QueueEmpty:
+                                        break
+
                                 engine_task = asyncio.create_task(load_engine(current_model))
                                 await websocket.send_text(json.dumps({"status": f"switching to {current_model}"}))
                         elif ctype == "request_models":
@@ -504,5 +530,18 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         except Exception:
             pass
     finally:
+        if partial_processing_task is not None and not partial_processing_task.done():
+            partial_processing_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await partial_processing_task
+        if final_processing_task is not None and not final_processing_task.done():
+            await final_segments_queue.put(None)
+            with contextlib.suppress(asyncio.CancelledError):
+                await final_processing_task
+        if receive_task is not None and not receive_task.done():
+            receive_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await receive_task
+
         server_manager.update_socket_count(current_model, -1)
         logger.info("WebSocket disconnected")

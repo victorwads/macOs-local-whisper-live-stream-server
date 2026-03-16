@@ -1,6 +1,6 @@
 import type { TranscriptItem } from "./types";
 
-export type UIEvent = "start" | "lap" | "stop" | "clearStorage" | "copyLastLap" | "configChange";
+export type UIEvent = "start" | "lap" | "stop" | "clearStorage" | "copyLastLap" | "copyLine" | "configChange";
 
 export interface ConfigChangePayload {
   key: string;
@@ -13,6 +13,7 @@ export interface UIListeners {
   stop: Array<(data?: undefined) => void>;
   clearStorage: Array<(data?: undefined) => void>;
   copyLastLap: Array<(data?: undefined) => void>;
+  copyLine: Array<(data: { text: string }) => void>;
   configChange: Array<(data: ConfigChangePayload) => void>;
 }
 
@@ -38,6 +39,11 @@ export class UIManager {
   initInputs(): void;
   updateInputs(): void;
   bindEvents(): void;
+  handleGlobalShortcuts(event: KeyboardEvent): void;
+  isTypingTarget(target: EventTarget | null): boolean;
+  isTranscriptContextActive(): boolean;
+  selectTranscriptLine(lineEl: HTMLElement): void;
+  getSelectedTranscriptLineText(): string;
   subscribe(event: UIEvent, callback: (data?: any) => void): void;
   emit(event: UIEvent, data?: any): void;
   updateLoadedLanguage(lang: string): void;
@@ -46,7 +52,7 @@ export class UIManager {
   logProcessingStats(type: string, stats?: { audio_duration: number; processing_time: number }): void;
   addAudioLog(blobUrl: string, durationMs: number): void;
   updateAudioStats(stats: Record<string, any>): void;
-  updateIndicators(level: number, isSilent: boolean): void;
+  updateIndicators(level: number, isSilent: boolean, silenceDurationMs?: number): void;
   updatePartialIntervalCurrent(partialIntervalMs: number): void;
   updateModelSelect(payload: UIModelPayload): void;
   setPartial(text: string): void;

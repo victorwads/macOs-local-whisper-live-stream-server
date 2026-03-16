@@ -62,7 +62,8 @@ export class AudioStateManager {
       totalSpectralEnergy: 0,
       dynamicThreshold: 0,
       isSpeech: false,
-      isSilent: this.isSilent
+      isSilent: this.isSilent,
+      silenceDurationMs: 0
     };
   }
 
@@ -112,6 +113,8 @@ export class AudioStateManager {
 
     const isSpeech = this.smoothedSpeechScore > this.speechThreshold;
 
+    const silenceDurationMs = this.isSilent ? Math.max(0, now - this.stateEnterTime) : 0;
+
     // 5) Atualiza estatísticas e envia para UI
     this.updateStateStatistics({
       rms,
@@ -121,7 +124,8 @@ export class AudioStateManager {
       dynamicThreshold,
       isSpeech,
       voiceBandRatio,
-      totalEnergy
+      totalEnergy,
+      silenceDurationMs
     });
 
     // 6) Lógica de histerese tempo-based para silence/speaking
@@ -174,7 +178,8 @@ export class AudioStateManager {
     dynamicThreshold,
     isSpeech,
     voiceBandRatio = 0,
-    totalEnergy = 0
+    totalEnergy = 0,
+    silenceDurationMs = 0
   }) {
     const stats = this.stats;
     const newVolume = rms; // usamos RMS como "volume" lógico
@@ -216,6 +221,7 @@ export class AudioStateManager {
     stats.dynamicThreshold = dynamicThreshold;
     stats.isSpeech = isSpeech;
     stats.isSilent = this.isSilent;
+    stats.silenceDurationMs = silenceDurationMs;
     stats.smoothedSpeechScore = this.smoothedSpeechScore;
 
     this.emit('statsUpdate', { ...stats });

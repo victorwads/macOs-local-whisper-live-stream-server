@@ -29,6 +29,7 @@ export class App {
   cleanLapName(rawName: string): string;
   resetTranscriptStorage(): void;
   copyLastLapToClipboard(): Promise<void>;
+  copyTranscriptLineToClipboard(text: string): Promise<void>;
   writeToClipboard(text: string): Promise<boolean>;
   buildBackendParams(): {
     window: number;

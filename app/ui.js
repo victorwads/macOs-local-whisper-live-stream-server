@@ -23,6 +23,7 @@ export class UIManager {
       levelIndicator: document.getElementById('levelIndicator'),
       stateIndicator: document.getElementById('stateIndicator'),
       partialIntervalCurrentIndicator: document.getElementById('partialIntervalCurrentIndicator'),
+      silenceDurationIndicator: document.getElementById('silenceDurationIndicator'),
       modelSelect: document.getElementById('modelSelect'),
       modelStatus: document.getElementById('modelStatus'),
       suggestedIndicator: document.getElementById('suggestedIndicator'),
@@ -46,6 +47,7 @@ export class UIManager {
       stop: [],
       clearStorage: [],
       copyLastLap: [],
+      copyLine: [],
       configChange: []
     };
 
@@ -110,6 +112,108 @@ export class UIManager {
     this.dom.modelSelect?.addEventListener('change', () => {
       this.emit('configChange', { key: 'model', value: this.dom.modelSelect.value });
     });
+
+    this.dom.final?.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const line = target.closest('.transcript-line');
+      if (!line) return;
+      this.selectTranscriptLine(line);
+      const textEl = line.querySelector('.transcript-text');
+      const text = (textEl?.textContent || '').trim();
+      if (text) this.emit('copyLine', { text });
+    });
+
+    this.dom.transcript?.addEventListener('click', () => {
+      this.dom.transcript?.focus();
+    });
+
+    document.addEventListener('keydown', (event) => {
+      this.handleGlobalShortcuts(event);
+    });
+  }
+
+  handleGlobalShortcuts(event) {
+    if (!event) return;
+
+    const key = (event.key || '').toLowerCase();
+    const isCopyChord = (event.metaKey || event.ctrlKey) && key === 'c';
+
+    if (isCopyChord && this.isTranscriptContextActive()) {
+      const selectedText = (window.getSelection?.()?.toString() || '').trim();
+      if (selectedText) return;
+      const selectedLineText = this.getSelectedTranscriptLineText();
+      if (selectedLineText) {
+        event.preventDefault();
+        this.emit('copyLine', { text: selectedLineText });
+        return;
+      }
+      event.preventDefault();
+      this.emit('copyLastLap');
+      return;
+    }
+
+    if (this.isTypingTarget(event.target)) return;
+    if (event.metaKey || event.ctrlKey) return;
+
+    if (event.altKey && key === 's') {
+      event.preventDefault();
+      this.emit('start');
+      return;
+    }
+    if (event.altKey && key === 'x') {
+      event.preventDefault();
+      this.emit('stop');
+      return;
+    }
+    if (key === 'l') {
+      event.preventDefault();
+      this.emit('lap');
+      return;
+    }
+    if (event.altKey && key === 'c') {
+      event.preventDefault();
+      this.emit('copyLastLap');
+    }
+  }
+
+  isTypingTarget(target) {
+    if (!(target instanceof HTMLElement)) return false;
+    const tag = target.tagName;
+    if (target.isContentEditable) return true;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+  }
+
+  isTranscriptContextActive() {
+    const transcriptEl = this.dom.transcript;
+    if (!transcriptEl) return false;
+
+    const active = document.activeElement;
+    if (active && transcriptEl.contains(active)) return true;
+    if (active === transcriptEl) return true;
+
+    const selection = window.getSelection?.();
+    if (!selection) return false;
+    const { anchorNode, focusNode } = selection;
+    return Boolean(
+      (anchorNode && transcriptEl.contains(anchorNode)) ||
+      (focusNode && transcriptEl.contains(focusNode))
+    );
+  }
+
+  selectTranscriptLine(lineEl) {
+    if (!(lineEl instanceof HTMLElement)) return;
+    this.dom.final?.querySelectorAll('.transcript-line-selected').forEach((el) => {
+      el.classList.remove('transcript-line-selected');
+    });
+    lineEl.classList.add('transcript-line-selected');
+  }
+
+  getSelectedTranscriptLineText() {
+    const selected = this.dom.final?.querySelector('.transcript-line-selected');
+    if (!(selected instanceof HTMLElement)) return '';
+    const textEl = selected.querySelector('.transcript-text');
+    return (textEl?.textContent || '').trim();
   }
 
   subscribe(event, callback) {
@@ -189,9 +293,18 @@ export class UIManager {
     if (this.dom.statIsSilent) this.dom.statIsSilent.textContent = stats.isSilent ? 'yes' : 'no';
   }
 
-  updateIndicators(level, isSilent) {
+  updateIndicators(level, isSilent, silenceDurationMs = 0) {
     if (this.dom.levelIndicator) this.dom.levelIndicator.textContent = level.toFixed(5);
     if (this.dom.stateIndicator) this.dom.stateIndicator.textContent = isSilent ? 'silence' : 'sending';
+    if (this.dom.silenceDurationIndicator) {
+      if (!isSilent || !Number.isFinite(silenceDurationMs) || silenceDurationMs <= 0) {
+        this.dom.silenceDurationIndicator.textContent = '0 ms';
+      } else if (silenceDurationMs < 1000) {
+        this.dom.silenceDurationIndicator.textContent = `${Math.round(silenceDurationMs)} ms`;
+      } else {
+        this.dom.silenceDurationIndicator.textContent = `${(silenceDurationMs / 1000).toFixed(2)} s`;
+      }
+    }
     
     this.levelHistory.push(level);
     if (this.levelHistory.length > 200) this.levelHistory.shift();
@@ -216,11 +329,26 @@ export class UIManager {
   updateModelSelect({ supported, installed, current, def, installed_info }) {
     const baseModels = supported.length ? supported : Array.from(new Set(installed || []));
     const installedSet = new Set(installed || []);
-    const installedModels = baseModels.filter((m) => installedSet.has(m));
-    const notInstalledModels = baseModels.filter((m) => !installedSet.has(m));
+    const installedInfo = installed_info || {};
+    const installedModels = baseModels
+      .filter((m) => installedSet.has(m))
+      .sort((a, b) => {
+        const aInfo = installedInfo?.[a] || {};
+        const bInfo = installedInfo?.[b] || {};
+        const aSize = Number.isFinite(aInfo.size_bytes)
+          ? aInfo.size_bytes
+          : (Number.isFinite(aInfo.size_gb) ? aInfo.size_gb * 1e9 : Number.POSITIVE_INFINITY);
+        const bSize = Number.isFinite(bInfo.size_bytes)
+          ? bInfo.size_bytes
+          : (Number.isFinite(bInfo.size_gb) ? bInfo.size_gb * 1e9 : Number.POSITIVE_INFINITY);
+        if (aSize !== bSize) return aSize - bSize;
+        return a.localeCompare(b);
+      });
+    const notInstalledModels = baseModels
+      .filter((m) => !installedSet.has(m))
+      .sort((a, b) => a.localeCompare(b));
     const models = [...installedModels, ...notInstalledModels];
     if (!models.length) return;
-    const installedInfo = installed_info || {};
     
     if (this.dom.modelSelect) {
       this.dom.modelSelect.innerHTML = '';
