@@ -7,9 +7,10 @@ export class ConfigManager {
       interval: 0.5,
       minSilence: 180,
       minSpeak: 250,
-      minSeconds: 1.5,
+      maxSeconds: 10,
       language: 'auto',
-      partialInterval: 300,
+      partialIntervalMin: 300,
+      partialIntervalMax: 1500,
     };
     
     // Load model from sessionStorage (priority) or localStorage
@@ -34,9 +35,14 @@ export class ConfigManager {
       interval: this.loadNumber(model, 'interval', this.defaults.interval),
       minSilence: this.loadNumber(model, 'minSilence', this.defaults.minSilence),
       minSpeak: this.loadNumber(model, 'minSpeak', this.defaults.minSpeak),
-      minSeconds: this.loadNumber(model, 'minSeconds', this.defaults.minSeconds),
+      maxSeconds: this.loadNumber(model, 'maxSeconds', this.defaults.maxSeconds),
       language: this.load(model, 'language', this.defaults.language),
-      partialInterval: this.loadNumber(model, 'partialInterval', this.defaults.partialInterval),
+      partialIntervalMin: this.loadNumber(
+        model,
+        'partialIntervalMin',
+        this.loadNumber(model, 'partialInterval', this.defaults.partialIntervalMin)
+      ),
+      partialIntervalMax: this.loadNumber(model, 'partialIntervalMax', this.defaults.partialIntervalMax),
     };
   }
 

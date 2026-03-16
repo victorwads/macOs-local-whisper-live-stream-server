@@ -20,8 +20,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 SAMPLE_RATE = 16000
-MAX_SECONDS = 10
-MAX_SAMPLES = MAX_SECONDS * SAMPLE_RATE
+DEFAULT_MAX_SECONDS = 10
 DEFAULT_MIN_SECONDS = 2.0
 
 IGNORED_TEXTS = {
@@ -125,8 +124,14 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     except ValueError:
         min_seconds = DEFAULT_MIN_SECONDS
     
-    # Ensure min_seconds is reasonable
-    min_seconds = max(0.5, min(min_seconds, MAX_SECONDS))
+    try:
+        max_seconds = float(query_params.get("max_seconds", DEFAULT_MAX_SECONDS))
+    except ValueError:
+        max_seconds = DEFAULT_MAX_SECONDS
+
+    # Ensure max_seconds and min_seconds are reasonable
+    max_seconds = max(1.0, min(max_seconds, 60.0))
+    min_seconds = max(0.5, min(min_seconds, max_seconds))
 
     # New parameters
     current_language = "auto"
@@ -273,7 +278,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             logger.error("Transcription failed: %s", exc, exc_info=True)
             await websocket.send_text(json.dumps({"error": str(exc)}))
 
-    segmenter = AudioSegmenter(min_seconds, MAX_SECONDS, SAMPLE_RATE, on_segment_ready)
+    segmenter = AudioSegmenter(min_seconds, max_seconds, SAMPLE_RATE, on_segment_ready)
 
     async def process_partial():
         nonlocal last_partial_time, engine_local, last_processed_size, is_processing_partial
@@ -439,6 +444,14 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                             if "min_seconds" in control:
                                 segmenter.min_seconds = float(control["min_seconds"])
                                 min_seconds = segmenter.min_seconds
+                            if "max_seconds" in control:
+                                next_max = float(control["max_seconds"])
+                                max_seconds = max(1.0, min(next_max, 60.0))
+                                segmenter.max_seconds = max_seconds
+                                # Keep min_seconds valid if max decreased
+                                if min_seconds > max_seconds:
+                                    min_seconds = max_seconds
+                                    segmenter.min_seconds = min_seconds
                             if "language" in control:
                                 current_language = normalize_language(control["language"])
                                 await websocket.send_text(json.dumps({

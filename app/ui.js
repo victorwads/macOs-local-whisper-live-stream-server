@@ -10,10 +10,11 @@ export class UIManager {
       thresholdInput: document.getElementById('thresholdInput'),
       minSilenceInput: document.getElementById('minSilenceInput'),
       minSpeakInput: document.getElementById('minSpeakInput'),
-      minSecondsInput: document.getElementById('minSecondsInput'),
+      maxSecondsInput: document.getElementById('maxSecondsInput'),
       languageInput: document.getElementById('languageInput'),
       loadedLang: document.getElementById('loadedLang'),
-      partialIntervalInput: document.getElementById('partialIntervalInput'),
+      partialIntervalMinInput: document.getElementById('partialIntervalMinInput'),
+      partialIntervalMaxInput: document.getElementById('partialIntervalMaxInput'),
       levelIndicator: document.getElementById('levelIndicator'),
       stateIndicator: document.getElementById('stateIndicator'),
       modelSelect: document.getElementById('modelSelect'),
@@ -54,9 +55,10 @@ export class UIManager {
     if (this.dom.thresholdInput) this.dom.thresholdInput.value = this.config.get('threshold');
     if (this.dom.minSilenceInput) this.dom.minSilenceInput.value = this.config.get('minSilence');
     if (this.dom.minSpeakInput) this.dom.minSpeakInput.value = this.config.get('minSpeak');
-    if (this.dom.minSecondsInput) this.dom.minSecondsInput.value = this.config.get('minSeconds');
+    if (this.dom.maxSecondsInput) this.dom.maxSecondsInput.value = this.config.get('maxSeconds');
     if (this.dom.languageInput) this.dom.languageInput.value = this.config.get('language');
-    if (this.dom.partialIntervalInput) this.dom.partialIntervalInput.value = this.config.get('partialInterval');
+    if (this.dom.partialIntervalMinInput) this.dom.partialIntervalMinInput.value = this.config.get('partialIntervalMin');
+    if (this.dom.partialIntervalMaxInput) this.dom.partialIntervalMaxInput.value = this.config.get('partialIntervalMax');
     // Also update model select if needed, though usually it triggers the change
     if (this.dom.modelSelect && this.dom.modelSelect.value !== this.config.get('model')) {
         this.dom.modelSelect.value = this.config.get('model');
@@ -81,8 +83,9 @@ export class UIManager {
     bindInput(this.dom.thresholdInput, 'threshold');
     bindInput(this.dom.minSilenceInput, 'minSilence');
     bindInput(this.dom.minSpeakInput, 'minSpeak');
-    bindInput(this.dom.minSecondsInput, 'minSeconds');
-    bindInput(this.dom.partialIntervalInput, 'partialInterval');
+    bindInput(this.dom.maxSecondsInput, 'maxSeconds');
+    bindInput(this.dom.partialIntervalMinInput, 'partialIntervalMin');
+    bindInput(this.dom.partialIntervalMaxInput, 'partialIntervalMax');
     bindInput(this.dom.languageInput, 'language', false);
 
     this.dom.modelSelect?.addEventListener('change', () => {

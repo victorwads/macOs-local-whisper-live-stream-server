@@ -61,8 +61,9 @@ class App {
           window: this.config.get('window'),
           interval: this.config.get('interval'),
           min_seconds: Math.min(0.5, this.config.get('window')),
+          max_seconds: this.config.get('maxSeconds'),
           language: this.config.get('language'),
-          partial_interval: this.config.get('partialInterval'),
+          partial_interval: this.config.get('partialIntervalMin'),
         });
         
         // 3. Send select_model
@@ -75,14 +76,15 @@ class App {
         this.segmenter.updateConfig(key, value);
         
         // Send params to backend if needed
-        if (['window', 'interval', 'language', 'partialInterval'].includes(key)) {
+        if (['window', 'interval', 'language', 'partialIntervalMin', 'partialIntervalMax', 'maxSeconds'].includes(key)) {
           this.ws.sendControl({
             type: 'set_params',
             window: this.config.get('window'),
             interval: this.config.get('interval'),
             min_seconds: Math.min(0.5, this.config.get('window')),
+            max_seconds: this.config.get('maxSeconds'),
             language: this.config.get('language'),
-            partial_interval: this.config.get('partialInterval'),
+            partial_interval: this.config.get('partialIntervalMin'),
           });
         }
       }
@@ -132,8 +134,9 @@ class App {
         window: this.config.get('window'),
         interval: this.config.get('interval'),
         min_seconds: Math.min(0.5, this.config.get('window')),
+        max_seconds: this.config.get('maxSeconds'),
         language: this.config.get('language'),
-        partial_interval: this.config.get('partialInterval'),
+        partial_interval: this.config.get('partialIntervalMin'),
       });
       this.ws.sendControl({ type: 'select_model', model: this.config.get('model') });
       this.ws.sendControl({ type: 'request_models' });
