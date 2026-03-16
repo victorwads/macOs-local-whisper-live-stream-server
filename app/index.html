@@ -25,19 +25,19 @@
           <select id="modelSelect"></select>
         </div>
         <div class="control-group">
-          <label for="thresholdInput" title="Audio level threshold to detect speech. Adjust if background noise is triggering capture.">Silence Threshold</label>
+          <label for="thresholdInput" title="Minimum audio level required to detect speech. If background noise is triggering capture when you are not speaking, increase this value.">Silence Threshold</label>
           <input id="thresholdInput" type="number" step="0.0001" min="0" value="0.0015">
         </div>
         <div class="control-group">
-          <label for="minSilenceInput" title="Milliseconds of silence required to consider a phrase complete.">Min Silence (ms)</label>
+          <label for="minSilenceInput" title="Minimum silence duration required to finalize (split) the current audio segment. Higher values keep more context and can improve punctuation/language detection, but increase latency and segment size.">Min Silence (ms)</label>
           <input id="minSilenceInput" type="number" step="100" min="0" value="1000">
         </div>
         <div class="control-group">
-          <label for="minSpeakInput" title="Minimum milliseconds of speech required to start capturing.">Min Speak (ms)</label>
+          <label for="minSpeakInput" title="Minimum speech duration required before attempting transcription. Helps capture short utterances (like 'oh' or 'hi') without reacting to ultra-short noise.">Min Speak (ms)</label>
           <input id="minSpeakInput" type="number" step="50" min="0" value="200">
         </div>
         <div class="control-group">
-          <label for="maxSecondsInput" title="Maximum duration (in seconds) of a segment before forced flush/transcription.">Max Audio (s)</label>
+          <label for="maxSecondsInput" title="Maximum segment duration before forcing transcription. Higher values keep more context (and cost more). Lower values reduce cost, but increase the risk of splitting context mid-sentence.">Max Audio (s)</label>
           <input id="maxSecondsInput" type="number" step="0.5" min="1" value="10">
         </div>
         <div class="control-group">
@@ -47,11 +47,11 @@
           <input type="text" id="languageInput" value="auto" placeholder="auto">
         </div>
         <div class="control-group">
-          <label for="partialIntervalMinInput" title="Minimum interval in milliseconds for partial transcriptions.">Partial Interval Min (ms)</label>
+          <label for="partialIntervalMinInput" title="Initial interval between partial transcriptions. Lower values feel more real-time, but increase GPU/CPU usage.">Partial Interval Min (ms)</label>
           <input type="number" id="partialIntervalMinInput" step="100" min="0" value="300">
         </div>
         <div class="control-group">
-          <label for="partialIntervalMaxInput" title="Maximum interval in milliseconds for partial transcriptions (for future adaptive mode).">Partial Interval Max (ms)</label>
+          <label for="partialIntervalMaxInput" title="Maximum interval for partials as the segment grows (adaptive mode). It is often close to Max Audio in milliseconds, but you can tune it for your latency/cost target.">Partial Interval Max (ms)</label>
           <input type="number" id="partialIntervalMaxInput" step="100" min="0" value="1500">
         </div>
       </div>
