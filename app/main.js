@@ -5,8 +5,9 @@ import { AudioStateManager } from './audioState.js';
 import { AudioSegmenter } from './audioSegmenter.js';
 import { WSClient } from './wsClient.js';
 import { encodeWAV } from './utils.js';
+import { appendTranscriptItem, loadTranscriptItems } from './storage.js';
 
-class App {
+export class App {
   constructor() {
     this.config = new ConfigManager();
     this.ui = new UIManager(this.config);
@@ -21,20 +22,33 @@ class App {
       minSilence: this.config.get('minSilence')
     });
     this.ws = new WSClient();
+    this.transcriptItems = [];
+    this.lapCount = 0;
+    this.lastFinalText = '';
+    this.currentLapId = this.generateLapId();
 
     this.init();
   }
 
   init() {
     this.setupEvents();
+    this.hydrateTranscript();
     this.ws.connect().catch(err => {
       this.ui.setStatus('Failed to connect to backend: ' + err.message);
     });
   }
 
+  hydrateTranscript() {
+    const items = loadTranscriptItems();
+    this.transcriptItems = items;
+    this.lapCount = items.reduce((acc, item) => acc + (item.type === 'lap' ? 1 : 0), 0);
+    this.ui.setTranscriptItems(items);
+  }
+
   setupEvents() {
     // UI Events
     this.ui.subscribe('start', () => this.startStreaming());
+    this.ui.subscribe('lap', () => this.addLapMarker());
     this.ui.subscribe('stop', () => this.stopStreaming());
     this.ui.subscribe('configChange', ({ key, value }) => {
       this.config.set(key, value);
@@ -157,7 +171,7 @@ class App {
         this.ui.logProcessingStats('Partial', data.stats);
       }
       if (data.type === 'final' && data.final !== undefined) {
-        this.ui.addFinal(data.final);
+        this.pushTranscriptItem(this.createTranscriptItem('final', data.final));
         this.ui.setPartial('');
         this.ui.logProcessingStats('Final', data.stats);
       }
@@ -176,8 +190,47 @@ class App {
     });
   }
 
+  addLapMarker() {
+    const previousLapId = this.currentLapId;
+    const label = `Lap ${this.lapCount + 1}`;
+    this.lapCount += 1;
+    const lapItem = this.createTranscriptItem('lap', label, previousLapId);
+    lapItem.lastMessage = this.lastFinalText || '';
+    this.pushTranscriptItem(lapItem);
+    this.currentLapId = this.generateLapId();
+    this.ui.setPartial('');
+    this.ws.sendControl({ type: 'silence' });
+  }
+
+  createTranscriptItem(type, text, lapId = this.currentLapId) {
+    const id = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `item-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    return {
+      id,
+      type,
+      text,
+      createdAt: Date.now(),
+      lapId,
+    };
+  }
+
+  pushTranscriptItem(item) {
+    if (!item.text) return;
+    this.transcriptItems.push(item);
+    if (item.type === 'final') this.lastFinalText = item.text;
+    this.ui.addTranscriptItem(item);
+    appendTranscriptItem(item);
+  }
+
+  generateLapId() {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+    return `lap-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+  }
+
   async startStreaming() {
     try {
+      this.currentLapId = this.generateLapId();
       await this.audioCapture.start((chunk, sampleRate) => {
         // Alimenta o VAD com amostras brutas
         this.audioState.processAudio(chunk, sampleRate);

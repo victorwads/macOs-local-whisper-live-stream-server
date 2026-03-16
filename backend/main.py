@@ -37,6 +37,15 @@ app.add_middleware(
 app.include_router(ws_router)
 
 
+@app.middleware("http")
+async def disable_frontend_cache(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
+
 @app.on_event("startup")
 async def load_model() -> None:
     try:
@@ -125,4 +134,3 @@ if app_dir.exists():
     app.mount("/", StaticFiles(directory=str(app_dir), html=True), name="static")
 else:
     logger.warning("App directory not found at %s", app_dir)
-

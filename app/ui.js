@@ -3,6 +3,7 @@ export class UIManager {
     this.config = configManager;
     this.dom = {
       startBtn: document.getElementById('startBtn'),
+      lapBtn: document.getElementById('lapBtn'),
       stopBtn: document.getElementById('stopBtn'),
       transcript: document.getElementById('transcript'),
       final: document.getElementById('finalTranscript'),
@@ -36,6 +37,7 @@ export class UIManager {
 
     this.listeners = {
       start: [],
+      lap: [],
       stop: [],
       configChange: []
     };
@@ -67,6 +69,7 @@ export class UIManager {
 
   bindEvents() {
     this.dom.startBtn?.addEventListener('click', () => this.emit('start'));
+    this.dom.lapBtn?.addEventListener('click', () => this.emit('lap'));
     this.dom.stopBtn?.addEventListener('click', () => this.emit('stop'));
 
     const bindInput = (el, key, isFloat = true) => {
@@ -214,17 +217,76 @@ export class UIManager {
     this.scrollTranscriptToBottom();
   }
 
-  addFinal(text) {
-    if (text) {
-      this.finals.push(text);
-      if (this.dom.final) {
-        const line = document.createElement('div');
-        line.className = 'transcript-line';
-        line.textContent = text;
-        this.dom.final.appendChild(line);
+  setTranscriptItems(items) {
+    this.finals = [];
+    if (this.dom.final) this.dom.final.innerHTML = '';
+    items.forEach((item) => this.addTranscriptItem(item));
+  }
+
+  addTranscriptItem(item) {
+    if (!item || !item.text || !this.dom.final) return;
+    if (item.type === 'final') this.finals.push(item.text);
+
+    if (item.type === 'lap') {
+      const separator = document.createElement('div');
+      separator.className = 'transcript-lap-separator';
+
+      const leftLine = document.createElement('div');
+      leftLine.className = 'transcript-lap-line';
+      const rightLine = document.createElement('div');
+      rightLine.className = 'transcript-lap-line';
+
+      const center = document.createElement('div');
+      center.className = 'transcript-lap-center';
+      center.textContent = `${this.formatTimestamp(item.createdAt)} • ${item.text}`;
+
+      separator.appendChild(leftLine);
+      separator.appendChild(center);
+      separator.appendChild(rightLine);
+      this.dom.final.appendChild(separator);
+
+      if (item.lastMessage) {
+        const hint = document.createElement('div');
+        hint.className = 'transcript-lap-hint';
+        hint.textContent = `Última frase: ${item.lastMessage}`;
+        this.dom.final.appendChild(hint);
       }
+
       this.scrollTranscriptToBottom();
+      return;
     }
+
+    const line = document.createElement('div');
+    line.className = 'transcript-line';
+
+    const timestamp = document.createElement('span');
+    timestamp.className = 'transcript-ts';
+    timestamp.textContent = this.formatTimestamp(item.createdAt);
+
+    const text = document.createElement('span');
+    text.className = 'transcript-text';
+    text.textContent = item.text;
+
+    line.appendChild(timestamp);
+    line.appendChild(text);
+    this.dom.final.appendChild(line);
+    this.scrollTranscriptToBottom();
+  }
+
+  formatTimestamp(ts) {
+    const dt = new Date(ts);
+    return dt.toLocaleTimeString();
+  }
+
+  addFinal(text) {
+    if (!text) return;
+    this.addTranscriptItem({
+      id: `legacy-${Date.now()}`,
+      lapId: `legacy-ui-${Date.now()}`,
+      type: 'final',
+      text,
+      createdAt: Date.now(),
+    });
   }
   
   clearFinals() {

@@ -1,5 +1,6 @@
 :root {
     --primary-color: #4f46e5;
+    --secondary-color: #0ea5e9;
     --danger-color: #e11d48;
     --bg-color: #f6f6fb;
     --card-bg: #ffffff;
@@ -99,6 +100,7 @@ button {
 button:hover { opacity: 0.9; }
 
 #startBtn { background: var(--primary-color); color: white; }
+#lapBtn { background: var(--secondary-color); color: white; }
 #stopBtn { background: var(--danger-color); color: white; }
 
 /* Indicators */
@@ -150,8 +152,53 @@ button:hover { opacity: 0.9; }
 }
 
 .transcript-line {
-    display: block;
-    margin-bottom: 4px;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+.transcript-ts {
+    color: #6b7280;
+    font-size: 0.85rem;
+    min-width: 72px;
+    font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.transcript-text {
+    color: #222;
+}
+
+.transcript-line-lap .transcript-text {
+    width: 100%;
+    color: #2563eb;
+    font-weight: 700;
+}
+
+.transcript-lap-separator {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 12px 0 6px;
+}
+
+.transcript-lap-line {
+    height: 1px;
+    background: #93c5fd;
+    flex: 1;
+}
+
+.transcript-lap-center {
+    color: #1d4ed8;
+    font-weight: 700;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+.transcript-lap-hint {
+    color: #6b7280;
+    font-size: 0.82rem;
+    margin: 0 0 8px 0;
 }
 
 .transcript-partial {
