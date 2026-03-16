@@ -50,6 +50,26 @@ h1 {
     padding-bottom: 8px;
 }
 
+.card-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.link-btn {
+    border: none;
+    background: transparent;
+    color: #2563eb;
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding: 0;
+    cursor: pointer;
+}
+
+.link-btn:hover {
+    text-decoration: underline;
+}
+
 /* Controls Section */
 .controls-grid {
     display: grid;

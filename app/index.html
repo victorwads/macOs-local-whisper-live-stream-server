@@ -76,6 +76,9 @@
             <strong>State:</strong> <span id="stateIndicator">idle</span>
         </div>
         <div class="indicator-item">
+            <strong>Partial Now:</strong> <span id="partialIntervalCurrentIndicator">--</span>
+        </div>
+        <div class="indicator-item">
             <strong>Suggested:</strong> <span id="suggestedIndicator">--</span>
         </div>
         <div class="indicator-item">
@@ -125,7 +128,10 @@
 
     <!-- Transcription Area -->
     <div class="card transcript-section">
-      <div class="card-header">Live Transcription</div>
+      <div class="card-header card-header-row">
+        <span>Live Transcription</span>
+        <button id="copyLastLapBtn" type="button" class="link-btn">Copy Last Lap</button>
+      </div>
       <div id="transcript" class="transcript-container">
         <div id="finalTranscript" class="transcript-final"></div>
         <div id="partialTranscript" class="transcript-partial"></div>

@@ -1,6 +1,6 @@
 import type { TranscriptItem } from "./types";
 
-export type UIEvent = "start" | "lap" | "stop" | "clearStorage" | "configChange";
+export type UIEvent = "start" | "lap" | "stop" | "clearStorage" | "copyLastLap" | "configChange";
 
 export interface ConfigChangePayload {
   key: string;
@@ -12,6 +12,7 @@ export interface UIListeners {
   lap: Array<(data?: undefined) => void>;
   stop: Array<(data?: undefined) => void>;
   clearStorage: Array<(data?: undefined) => void>;
+  copyLastLap: Array<(data?: undefined) => void>;
   configChange: Array<(data: ConfigChangePayload) => void>;
 }
 
@@ -46,6 +47,7 @@ export class UIManager {
   addAudioLog(blobUrl: string, durationMs: number): void;
   updateAudioStats(stats: Record<string, any>): void;
   updateIndicators(level: number, isSilent: boolean): void;
+  updatePartialIntervalCurrent(partialIntervalMs: number): void;
   updateModelSelect(payload: UIModelPayload): void;
   setPartial(text: string): void;
   setTranscriptItems(items: TranscriptItem[]): void;

@@ -39,10 +39,16 @@ class SocketBackendClient {
       ...params,
     });
   }
+
+  triggerPartial(intervalMs) {
+    this.transport.sendControl({
+      type: 'trigger_partial',
+      interval_ms: intervalMs,
+    });
+  }
 }
 
 export function createBackendClient(mode = 'ws') {
   if (mode === 'ws') return new SocketBackendClient();
   throw new Error(`Unsupported backend client mode: ${mode}`);
 }
-

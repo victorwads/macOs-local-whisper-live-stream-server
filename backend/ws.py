@@ -4,7 +4,6 @@ import time
 import os
 import logging
 import unicodedata
-from collections import deque
 from typing import Optional
 
 import numpy as np
@@ -142,8 +141,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
     # New parameters
     current_language = "auto"
-    partial_interval_ms = 500  # Default 500ms
-    last_partial_time = 0
+    partial_interval_current_ms = 0.0
+    last_processing_ms = 0.0
     # If False, texts composed only of non‑Latin letters (e.g. Cyrillic)
     # will be ignored by default. Can be overridden by env or set_params.
     allow_non_latin = os.getenv("ALLOW_NON_LATIN", "0") == "1"
@@ -229,11 +228,13 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             return None
 
     async def on_segment_ready(audio_segment: np.ndarray):
-        nonlocal engine_local, engine_task, current_segment_id, last_processed_size
+        nonlocal engine_local, engine_task, current_segment_id, last_processed_size, last_processing_ms, partial_interval_current_ms
         
         # Invalidate current partials
         current_segment_id += 1
         last_processed_size = 0
+        last_processing_ms = 0.0
+        partial_interval_current_ms = 0.0
         
         if audio_segment.size == 0:
             return
@@ -279,7 +280,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     "history": final_history,
                     "stats": {
                         "audio_duration": audio_duration,
-                        "processing_time": process_time
+                        "processing_time": process_time,
+                        "processing_time_ms": int(round(process_time * 1000)),
+                        "partial_interval_ms": int(round(partial_interval_current_ms)),
                     }
                 }))
         except Exception as exc:
@@ -288,19 +291,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
     segmenter = AudioSegmenter(min_seconds, max_seconds, SAMPLE_RATE, on_segment_ready)
 
-    async def process_partial():
-        nonlocal last_partial_time, engine_local, last_processed_size, is_processing_partial
+    async def process_partial(requested_interval_ms: float = 0.0):
+        nonlocal engine_local, last_processed_size, is_processing_partial, last_processing_ms, partial_interval_current_ms
         
         if is_processing_partial:
             logger.warning("Partial requested but is_processing_partial is True! Skipping.")
-            return
-            
-        if partial_interval_ms < 100:
-            return
-
-        now = time.time() * 1000
-        time_diff = now - last_partial_time
-        if time_diff < partial_interval_ms:
             return
 
         # Check if we have enough audio in buffer to try a partial
@@ -308,7 +303,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         current_size = segmenter.buffer.size
         if current_size < SAMPLE_RATE * 0.5: # at least 0.5s
             return
-            
+
         # Check if buffer has grown since last processing
         if current_size <= last_processed_size:
             return
@@ -322,8 +317,13 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
         is_processing_partial = True
         try:
-            logger.info(f"Running partial: buffer={current_size/SAMPLE_RATE:.2f}s, interval={time_diff:.0f}ms")
-            last_partial_time = now
+            current_audio_seconds = current_size / SAMPLE_RATE
+            partial_interval_current_ms = max(0.0, requested_interval_ms)
+            logger.info(
+                "Running partial: buffer=%.2fs requested_interval=%.0fms",
+                current_audio_seconds,
+                partial_interval_current_ms,
+            )
             
             # Capture segment ID to verify validity later
             my_segment_id = current_segment_id
@@ -339,6 +339,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 None, lambda: engine_local.transcribe_array(audio_copy, current_language, is_partial=True)
             )
             process_time = time.time() - start_time
+            last_processing_ms = process_time * 1000.0
             audio_duration = audio_copy.size / SAMPLE_RATE
             text = (result.get("text") or "").strip()
 
@@ -363,7 +364,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         "text": text,
                         "stats": {
                             "audio_duration": audio_duration,
-                            "processing_time": process_time
+                            "processing_time": process_time,
+                            "processing_time_ms": int(round(process_time * 1000)),
+                            "partial_interval_ms": int(round(partial_interval_current_ms)),
                         }
                     }))
             else:
@@ -388,10 +391,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 now = time.time()
                 time_since_activity = now - last_activity_time
                 
-                # We want to wake up for partials
                 wait_timeout = min_seconds
-                if partial_interval_ms > 0:
-                    wait_timeout = min(wait_timeout, partial_interval_ms / 1000.0)
                 
                 # Also ensure we don't sleep past the silence timeout
                 remaining_silence_time = min_seconds - time_since_activity
@@ -466,10 +466,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                                     "type": "language_update",
                                     "language": current_language or "Auto"
                                 }))
-                            if "partial_interval" in control:
-                                partial_interval_ms = float(control["partial_interval"])
                             if "allow_non_latin" in control:
                                 allow_non_latin = bool(control["allow_non_latin"])
+                        elif ctype == "trigger_partial":
+                            requested_interval_ms = float(control.get("interval_ms", 0))
+                            if partial_processing_task is None or partial_processing_task.done():
+                                partial_processing_task = asyncio.create_task(process_partial(requested_interval_ms))
 
                     if "bytes" in message and message["bytes"]:
                         chunk = np.frombuffer(message["bytes"], dtype=np.float32)
@@ -485,12 +487,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         # Reset activity time to avoid repeated flushing if no new data comes
                         last_activity_time = time.time()
                 
-                # Try to process partials in background if not already running
-                if not is_processing_partial and (partial_processing_task is None or partial_processing_task.done()):
-                    partial_processing_task = asyncio.create_task(process_partial())
-                elif is_processing_partial:
-                    # logger.debug("Skipping partial: already processing")
-                    pass
+                # Partial execution is now frontend-triggered via control message "trigger_partial".
 
             except WebSocketDisconnect:
                 break

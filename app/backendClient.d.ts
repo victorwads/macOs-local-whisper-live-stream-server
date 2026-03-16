@@ -6,7 +6,6 @@ export interface BackendSetParamsPayload {
   min_seconds: number;
   max_seconds: number;
   language: string;
-  partial_interval: number;
 }
 
 export interface BackendClient {
@@ -18,7 +17,7 @@ export interface BackendClient {
   selectModel(model: string): void;
   requestModels(): void;
   setParams(params: BackendSetParamsPayload): void;
+  triggerPartial(intervalMs: number): void;
 }
 
 export function createBackendClient(mode?: "ws"): BackendClient;
-

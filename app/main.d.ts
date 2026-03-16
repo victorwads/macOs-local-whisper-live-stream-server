@@ -12,6 +12,11 @@ export class App {
   lapCount: number;
   lastFinalText: string;
   currentLapId: string;
+  streamingActive: boolean;
+  partialSchedulerTimer: number | null;
+  currentSpeechStartedAt: number;
+  lastPartialProcessingMs: number;
+  partialIntervalCurrentMs: number;
   constructor();
   init(): void;
   hydrateTranscript(): void;
@@ -23,14 +28,21 @@ export class App {
   parseLapVoiceCommand(finalText: string): { matched: boolean; name: string };
   cleanLapName(rawName: string): string;
   resetTranscriptStorage(): void;
+  copyLastLapToClipboard(): Promise<void>;
+  writeToClipboard(text: string): Promise<boolean>;
   buildBackendParams(): {
     window: number;
     interval: number;
     min_seconds: number;
     max_seconds: number;
     language: string;
-    partial_interval: number;
   };
+  startPartialScheduler(): void;
+  stopPartialScheduler(): void;
+  restartPartialScheduler(): void;
+  scheduleNextPartialTick(delayMs: number): void;
+  handlePartialTick(): void;
+  computeAdaptivePartialIntervalMs(): number;
   startStreaming(): Promise<void>;
   stopStreaming(): void;
 }

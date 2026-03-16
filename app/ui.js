@@ -6,6 +6,7 @@ export class UIManager {
       lapBtn: document.getElementById('lapBtn'),
       stopBtn: document.getElementById('stopBtn'),
       clearStorageBtn: document.getElementById('clearStorageBtn'),
+      copyLastLapBtn: document.getElementById('copyLastLapBtn'),
       transcript: document.getElementById('transcript'),
       final: document.getElementById('finalTranscript'),
       status: document.getElementById('status'),
@@ -21,6 +22,7 @@ export class UIManager {
       partialIntervalMaxInput: document.getElementById('partialIntervalMaxInput'),
       levelIndicator: document.getElementById('levelIndicator'),
       stateIndicator: document.getElementById('stateIndicator'),
+      partialIntervalCurrentIndicator: document.getElementById('partialIntervalCurrentIndicator'),
       modelSelect: document.getElementById('modelSelect'),
       modelStatus: document.getElementById('modelStatus'),
       suggestedIndicator: document.getElementById('suggestedIndicator'),
@@ -43,6 +45,7 @@ export class UIManager {
       lap: [],
       stop: [],
       clearStorage: [],
+      copyLastLap: [],
       configChange: []
     };
 
@@ -78,6 +81,7 @@ export class UIManager {
     this.dom.lapBtn?.addEventListener('click', () => this.emit('lap'));
     this.dom.stopBtn?.addEventListener('click', () => this.emit('stop'));
     this.dom.clearStorageBtn?.addEventListener('click', () => this.emit('clearStorage'));
+    this.dom.copyLastLapBtn?.addEventListener('click', () => this.emit('copyLastLap'));
 
     const bindInput = (el, key, isFloat = true) => {
       el?.addEventListener('input', () => {
@@ -186,8 +190,8 @@ export class UIManager {
   }
 
   updateIndicators(level, isSilent) {
-    if (this.dom.levelIndicator) this.dom.levelIndicator.textContent = `Level: ${level.toFixed(5)}`;
-    if (this.dom.stateIndicator) this.dom.stateIndicator.textContent = `State: ${isSilent ? 'silence' : 'sending'}`;
+    if (this.dom.levelIndicator) this.dom.levelIndicator.textContent = level.toFixed(5);
+    if (this.dom.stateIndicator) this.dom.stateIndicator.textContent = isSilent ? 'silence' : 'sending';
     
     this.levelHistory.push(level);
     if (this.levelHistory.length > 200) this.levelHistory.shift();
@@ -196,12 +200,25 @@ export class UIManager {
     const maxL = Math.max(...this.levelHistory);
     const suggested = minL + (maxL - minL) * 0.2;
     if (this.dom.suggestedIndicator && Number.isFinite(suggested)) {
-      this.dom.suggestedIndicator.textContent = `Suggested: ${suggested.toFixed(5)}`;
+      this.dom.suggestedIndicator.textContent = suggested.toFixed(5);
     }
   }
 
+  updatePartialIntervalCurrent(partialIntervalMs) {
+    if (!this.dom.partialIntervalCurrentIndicator) return;
+    if (!Number.isFinite(partialIntervalMs) || partialIntervalMs <= 0) {
+      this.dom.partialIntervalCurrentIndicator.textContent = '--';
+      return;
+    }
+    this.dom.partialIntervalCurrentIndicator.textContent = `${Math.round(partialIntervalMs)} ms`;
+  }
+
   updateModelSelect({ supported, installed, current, def, installed_info }) {
-    const models = supported.length ? supported : Array.from(new Set(installed || []));
+    const baseModels = supported.length ? supported : Array.from(new Set(installed || []));
+    const installedSet = new Set(installed || []);
+    const installedModels = baseModels.filter((m) => installedSet.has(m));
+    const notInstalledModels = baseModels.filter((m) => !installedSet.has(m));
+    const models = [...installedModels, ...notInstalledModels];
     if (!models.length) return;
     const installedInfo = installed_info || {};
     
