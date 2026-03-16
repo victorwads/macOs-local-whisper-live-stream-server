@@ -15,10 +15,13 @@ export class App {
   init(): void;
   hydrateTranscript(): void;
   setupEvents(): void;
-  addLapMarker(): void;
+  addLapMarker(lapName?: string): void;
   createTranscriptItem(type: "final" | "lap", text: string, lapId?: string): TranscriptItem;
   pushTranscriptItem(item: TranscriptItem): void;
   generateLapId(): string;
+  parseLapVoiceCommand(finalText: string): { matched: boolean; name: string };
+  cleanLapName(rawName: string): string;
+  resetTranscriptStorage(): void;
   startStreaming(): Promise<void>;
   stopStreaming(): void;
 }

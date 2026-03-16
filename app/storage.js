@@ -25,6 +25,14 @@ export function appendTranscriptItem(item) {
   }
 }
 
+export function clearTranscriptStorage() {
+  try {
+    localStorage.removeItem(TRANSCRIPT_ITEMS_KEY);
+  } catch (err) {
+    console.warn('Failed to clear transcript storage:', err);
+  }
+}
+
 function isValidTranscriptItem(value) {
   if (!value || typeof value !== 'object') return false;
   const item = value;

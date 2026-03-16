@@ -11,6 +11,8 @@ export class ConfigManager {
       language: 'auto',
       partialIntervalMin: 300,
       partialIntervalMax: 1500,
+      lapVoicePhrase: 'novo contexto',
+      lapVoiceMatchMode: 'contains',
     };
     
     // Load model from sessionStorage (priority) or localStorage
@@ -43,6 +45,8 @@ export class ConfigManager {
         this.loadNumber(model, 'partialInterval', this.defaults.partialIntervalMin)
       ),
       partialIntervalMax: this.loadNumber(model, 'partialIntervalMax', this.defaults.partialIntervalMax),
+      lapVoicePhrase: this.load(model, 'lapVoicePhrase', this.defaults.lapVoicePhrase),
+      lapVoiceMatchMode: this.load(model, 'lapVoiceMatchMode', this.defaults.lapVoiceMatchMode),
     };
   }
 

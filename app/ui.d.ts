@@ -1,6 +1,6 @@
 import type { TranscriptItem } from "./types";
 
-export type UIEvent = "start" | "lap" | "stop" | "configChange";
+export type UIEvent = "start" | "lap" | "stop" | "clearStorage" | "configChange";
 
 export interface ConfigChangePayload {
   key: string;
@@ -11,6 +11,7 @@ export interface UIListeners {
   start: Array<(data?: undefined) => void>;
   lap: Array<(data?: undefined) => void>;
   stop: Array<(data?: undefined) => void>;
+  clearStorage: Array<(data?: undefined) => void>;
   configChange: Array<(data: ConfigChangePayload) => void>;
 }
 
@@ -53,4 +54,3 @@ export class UIManager {
   clearFinals(): void;
   scrollTranscriptToBottom(): void;
 }
-

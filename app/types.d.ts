@@ -5,6 +5,7 @@ export interface TranscriptItem {
   lapId: string;
   type: TranscriptItemType;
   text: string;
+  lapName?: string;
   createdAt: number;
   lastMessage?: string;
 }

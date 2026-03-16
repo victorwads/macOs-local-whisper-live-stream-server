@@ -5,7 +5,7 @@ import { AudioStateManager } from './audioState.js';
 import { AudioSegmenter } from './audioSegmenter.js';
 import { WSClient } from './wsClient.js';
 import { encodeWAV } from './utils.js';
-import { appendTranscriptItem, loadTranscriptItems } from './storage.js';
+import { appendTranscriptItem, clearTranscriptStorage, loadTranscriptItems } from './storage.js';
 
 export class App {
   constructor() {
@@ -50,6 +50,7 @@ export class App {
     this.ui.subscribe('start', () => this.startStreaming());
     this.ui.subscribe('lap', () => this.addLapMarker());
     this.ui.subscribe('stop', () => this.stopStreaming());
+    this.ui.subscribe('clearStorage', () => this.resetTranscriptStorage());
     this.ui.subscribe('configChange', ({ key, value }) => {
       this.config.set(key, value);
       
@@ -171,6 +172,14 @@ export class App {
         this.ui.logProcessingStats('Partial', data.stats);
       }
       if (data.type === 'final' && data.final !== undefined) {
+        const lapVoice = this.parseLapVoiceCommand(data.final);
+        if (lapVoice.matched) {
+          this.ui.addLog(`Voice Lap command detected: "${data.final}"`);
+          this.addLapMarker(lapVoice.name);
+          this.ui.setPartial('');
+          this.ui.logProcessingStats('Final', data.stats);
+          return;
+        }
         this.pushTranscriptItem(this.createTranscriptItem('final', data.final));
         this.ui.setPartial('');
         this.ui.logProcessingStats('Final', data.stats);
@@ -190,11 +199,12 @@ export class App {
     });
   }
 
-  addLapMarker() {
+  addLapMarker(lapName = '') {
     const previousLapId = this.currentLapId;
     const label = `Lap ${this.lapCount + 1}`;
     this.lapCount += 1;
     const lapItem = this.createTranscriptItem('lap', label, previousLapId);
+    lapItem.lapName = lapName || '';
     lapItem.lastMessage = this.lastFinalText || '';
     this.pushTranscriptItem(lapItem);
     this.currentLapId = this.generateLapId();
@@ -226,6 +236,44 @@ export class App {
   generateLapId() {
     if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
     return `lap-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+  }
+
+  parseLapVoiceCommand(finalText) {
+    if (!finalText || typeof finalText !== 'string') return { matched: false, name: '' };
+
+    const phrase = (this.config.get('lapVoicePhrase') || '').toString().trim().toLowerCase();
+    if (!phrase) return { matched: false, name: '' };
+
+    const mode = (this.config.get('lapVoiceMatchMode') || 'contains').toString();
+    const original = finalText.trim();
+    const normalizedText = original.toLowerCase();
+
+    if (mode === 'starts_with') {
+      if (!normalizedText.startsWith(phrase)) return { matched: false, name: '' };
+      const rawName = original.slice(phrase.length).trim();
+      return { matched: true, name: this.cleanLapName(rawName) };
+    }
+
+    const idx = normalizedText.indexOf(phrase);
+    if (idx < 0) return { matched: false, name: '' };
+    const rawName = original.slice(idx + phrase.length).trim();
+    return { matched: true, name: this.cleanLapName(rawName) };
+  }
+
+  cleanLapName(rawName) {
+    if (!rawName) return '';
+    return rawName.replace(/^[:\-–—,\s]+/, '').trim();
+  }
+
+  resetTranscriptStorage() {
+    clearTranscriptStorage();
+    this.transcriptItems = [];
+    this.lastFinalText = '';
+    this.lapCount = 0;
+    this.currentLapId = this.generateLapId();
+    this.ui.setTranscriptItems([]);
+    this.ui.setPartial('');
+    this.ui.addLog('Transcript storage cleared.');
   }
 
   async startStreaming() {

@@ -17,6 +17,7 @@
         <button id="startBtn" type="button">Start Mic</button>
         <button id="lapBtn" type="button">Lap</button>
         <button id="stopBtn" type="button">Stop</button>
+        <button id="clearStorageBtn" type="button">Clear Storage</button>
       </div>
 
       <div class="controls-grid">
@@ -53,6 +54,17 @@
         <div class="control-group">
           <label for="partialIntervalMaxInput" title="Maximum interval for partials as the segment grows (adaptive mode). It is often close to Max Audio in milliseconds, but you can tune it for your latency/cost target.">Partial Interval Max (ms)</label>
           <input type="number" id="partialIntervalMaxInput" step="100" min="0" value="1500">
+        </div>
+        <div class="control-group">
+          <label for="lapVoicePhraseInput" title="Final transcription phrase used to create a new Lap marker by voice command. Matching is case-insensitive.">Lap Voice Phrase</label>
+          <input type="text" id="lapVoicePhraseInput" value="novo contexto" placeholder="e.g. novo contexto">
+        </div>
+        <div class="control-group">
+          <label for="lapVoiceMatchModeInput" title="How to match the phrase in final transcriptions: contains or starts with. Matching is case-insensitive.">Lap Voice Match</label>
+          <select id="lapVoiceMatchModeInput">
+            <option value="contains">contains</option>
+            <option value="starts_with">starts with</option>
+          </select>
         </div>
       </div>
 

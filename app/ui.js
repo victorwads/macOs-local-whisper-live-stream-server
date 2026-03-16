@@ -5,6 +5,7 @@ export class UIManager {
       startBtn: document.getElementById('startBtn'),
       lapBtn: document.getElementById('lapBtn'),
       stopBtn: document.getElementById('stopBtn'),
+      clearStorageBtn: document.getElementById('clearStorageBtn'),
       transcript: document.getElementById('transcript'),
       final: document.getElementById('finalTranscript'),
       status: document.getElementById('status'),
@@ -13,6 +14,8 @@ export class UIManager {
       minSpeakInput: document.getElementById('minSpeakInput'),
       maxSecondsInput: document.getElementById('maxSecondsInput'),
       languageInput: document.getElementById('languageInput'),
+      lapVoicePhraseInput: document.getElementById('lapVoicePhraseInput'),
+      lapVoiceMatchModeInput: document.getElementById('lapVoiceMatchModeInput'),
       loadedLang: document.getElementById('loadedLang'),
       partialIntervalMinInput: document.getElementById('partialIntervalMinInput'),
       partialIntervalMaxInput: document.getElementById('partialIntervalMaxInput'),
@@ -39,6 +42,7 @@ export class UIManager {
       start: [],
       lap: [],
       stop: [],
+      clearStorage: [],
       configChange: []
     };
 
@@ -59,6 +63,8 @@ export class UIManager {
     if (this.dom.minSpeakInput) this.dom.minSpeakInput.value = this.config.get('minSpeak');
     if (this.dom.maxSecondsInput) this.dom.maxSecondsInput.value = this.config.get('maxSeconds');
     if (this.dom.languageInput) this.dom.languageInput.value = this.config.get('language');
+    if (this.dom.lapVoicePhraseInput) this.dom.lapVoicePhraseInput.value = this.config.get('lapVoicePhrase');
+    if (this.dom.lapVoiceMatchModeInput) this.dom.lapVoiceMatchModeInput.value = this.config.get('lapVoiceMatchMode');
     if (this.dom.partialIntervalMinInput) this.dom.partialIntervalMinInput.value = this.config.get('partialIntervalMin');
     if (this.dom.partialIntervalMaxInput) this.dom.partialIntervalMaxInput.value = this.config.get('partialIntervalMax');
     // Also update model select if needed, though usually it triggers the change
@@ -71,6 +77,7 @@ export class UIManager {
     this.dom.startBtn?.addEventListener('click', () => this.emit('start'));
     this.dom.lapBtn?.addEventListener('click', () => this.emit('lap'));
     this.dom.stopBtn?.addEventListener('click', () => this.emit('stop'));
+    this.dom.clearStorageBtn?.addEventListener('click', () => this.emit('clearStorage'));
 
     const bindInput = (el, key, isFloat = true) => {
       el?.addEventListener('input', () => {
@@ -90,6 +97,11 @@ export class UIManager {
     bindInput(this.dom.partialIntervalMinInput, 'partialIntervalMin');
     bindInput(this.dom.partialIntervalMaxInput, 'partialIntervalMax');
     bindInput(this.dom.languageInput, 'language', false);
+    bindInput(this.dom.lapVoicePhraseInput, 'lapVoicePhrase', false);
+
+    this.dom.lapVoiceMatchModeInput?.addEventListener('change', () => {
+      this.emit('configChange', { key: 'lapVoiceMatchMode', value: this.dom.lapVoiceMatchModeInput.value });
+    });
 
     this.dom.modelSelect?.addEventListener('change', () => {
       this.emit('configChange', { key: 'model', value: this.dom.modelSelect.value });
@@ -238,7 +250,8 @@ export class UIManager {
 
       const center = document.createElement('div');
       center.className = 'transcript-lap-center';
-      center.textContent = `${this.formatTimestamp(item.createdAt)} • ${item.text}`;
+      const lapLabel = item.lapName ? `${item.text} — ${item.lapName}` : item.text;
+      center.textContent = `${this.formatTimestamp(item.createdAt)} • ${lapLabel}`;
 
       separator.appendChild(leftLine);
       separator.appendChild(center);
