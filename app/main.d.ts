@@ -17,6 +17,9 @@ export class App {
   currentSpeechStartedAt: number;
   lastPartialProcessingMs: number;
   partialIntervalCurrentMs: number;
+  silenceStartedAtMs: number;
+  silenceUiTicker: number | null;
+  pendingSilenceCommitTimer: number | null;
   constructor();
   init(): void;
   hydrateTranscript(): void;

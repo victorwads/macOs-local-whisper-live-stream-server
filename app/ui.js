@@ -296,15 +296,7 @@ export class UIManager {
   updateIndicators(level, isSilent, silenceDurationMs = 0) {
     if (this.dom.levelIndicator) this.dom.levelIndicator.textContent = level.toFixed(5);
     if (this.dom.stateIndicator) this.dom.stateIndicator.textContent = isSilent ? 'silence' : 'sending';
-    if (this.dom.silenceDurationIndicator) {
-      if (!isSilent || !Number.isFinite(silenceDurationMs) || silenceDurationMs <= 0) {
-        this.dom.silenceDurationIndicator.textContent = '0 ms';
-      } else if (silenceDurationMs < 1000) {
-        this.dom.silenceDurationIndicator.textContent = `${Math.round(silenceDurationMs)} ms`;
-      } else {
-        this.dom.silenceDurationIndicator.textContent = `${(silenceDurationMs / 1000).toFixed(2)} s`;
-      }
-    }
+    this.updateSilenceDuration(silenceDurationMs, isSilent);
     
     this.levelHistory.push(level);
     if (this.levelHistory.length > 200) this.levelHistory.shift();
@@ -315,6 +307,21 @@ export class UIManager {
     if (this.dom.suggestedIndicator && Number.isFinite(suggested)) {
       this.dom.suggestedIndicator.textContent = suggested.toFixed(5);
     }
+  }
+
+  updateSilenceDuration(silenceDurationMs = 0, isSilent = false) {
+    if (!this.dom.silenceDurationIndicator) return;
+    if (!Number.isFinite(silenceDurationMs) || silenceDurationMs <= 0) {
+      this.dom.silenceDurationIndicator.textContent = '0 ms';
+      return;
+    }
+    if (silenceDurationMs < 1000) {
+      const suffix = isSilent ? '' : ' (candidate)';
+      this.dom.silenceDurationIndicator.textContent = `${Math.round(silenceDurationMs)} ms${suffix}`;
+      return;
+    }
+    const suffix = isSilent ? '' : ' (candidate)';
+    this.dom.silenceDurationIndicator.textContent = `${(silenceDurationMs / 1000).toFixed(2)} s${suffix}`;
   }
 
   updatePartialIntervalCurrent(partialIntervalMs) {
@@ -365,7 +372,7 @@ export class UIManager {
         this.dom.modelSelect.appendChild(opt);
       });
     }
-    if (this.dom.modelStatus) this.dom.modelStatus.textContent = `Selected model: ${current}`;
+    if (this.dom.modelStatus) this.dom.modelStatus.textContent = current || '';
   }
 
   setPartial(text) {

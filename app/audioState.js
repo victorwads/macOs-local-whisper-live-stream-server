@@ -11,9 +11,11 @@ export class AudioStateManager {
     // Limite de decisão de fala baseado no speechScore espectral
     this.speechThreshold = config.speechThreshold ?? 15;
 
-    // Fator de suavização para o speechScore (0.0 a 1.0)
-    // Quanto maior, mais suave (menos jitter), mas mais lento para reagir
-    this.smoothingFactor = 0.6;
+    // Smoothing assimétrico:
+    // - subida mais suave para evitar jitter em ruído
+    // - queda mais rápida para detectar silêncio entre palavras
+    this.risingSmoothingFactor = config.risingSmoothingFactor ?? 0.65;
+    this.fallingSmoothingFactor = config.fallingSmoothingFactor ?? 0.35;
 
     // Tamanho fixo para FFT usada no cálculo de energia espectral
     this.fftSize = config.fftSize ?? 1024; // deve ser potência de 2
@@ -35,9 +37,6 @@ export class AudioStateManager {
     };
 
     this.smoothedSpeechScore = null;
-    this.lastNonSpeechTime = null;
-    this.lastSpeechTime = null;
-
     this.createInitialStateStatistics();
     
     // Track when we entered the current state
@@ -63,7 +62,8 @@ export class AudioStateManager {
       dynamicThreshold: 0,
       isSpeech: false,
       isSilent: this.isSilent,
-      silenceDurationMs: 0
+      silenceDurationMs: 0,
+      silenceCandidateMs: 0
     };
   }
 
@@ -106,29 +106,16 @@ export class AudioStateManager {
     if (this.smoothedSpeechScore == null) {
       this.smoothedSpeechScore = speechScore;
     } else {
-      // Smoothing um pouco mais responsivo que antes
-      const alpha = this.smoothingFactor;
+      // Usa alpha menor quando score cai, para reduzir latência de detecção de silêncio.
+      const alpha = speechScore < this.smoothedSpeechScore
+        ? this.fallingSmoothingFactor
+        : this.risingSmoothingFactor;
       this.smoothedSpeechScore = this.smoothedSpeechScore * alpha + speechScore * (1 - alpha);
     }
 
     const isSpeech = this.smoothedSpeechScore > this.speechThreshold;
 
-    const silenceDurationMs = this.isSilent ? Math.max(0, now - this.stateEnterTime) : 0;
-
-    // 5) Atualiza estatísticas e envia para UI
-    this.updateStateStatistics({
-      rms,
-      zcr,
-      noiseFloor: this.noiseFloor,
-      speechScore,
-      dynamicThreshold,
-      isSpeech,
-      voiceBandRatio,
-      totalEnergy,
-      silenceDurationMs
-    });
-
-    // 6) Lógica de histerese tempo-based para silence/speaking
+    // 5) Lógica de histerese tempo-based para silence/speaking
     if (this.isSilent) {
       // Atualmente em silêncio: verificar se deve mudar para fala
       if (isSpeech) {
@@ -138,15 +125,7 @@ export class AudioStateManager {
           this.transitionToSpeak();
         }
       } else {
-        // Continua em silêncio, debounce para resetar timer de fala
-        if (!isSpeech) {
-          if (this.lastNonSpeechTime == null) this.lastNonSpeechTime = now;
-          if (now - this.lastNonSpeechTime > 40) {
-            this.speakStartTime = null;
-          }
-        } else {
-          this.lastNonSpeechTime = null;
-        }
+        this.speakStartTime = null;
       }
     } else {
       // Atualmente falando: verificar se deve mudar para silêncio
@@ -157,17 +136,27 @@ export class AudioStateManager {
           this.transitionToSilence();
         }
       } else {
-        // Continua falando, debounce para resetar timer de silêncio
-        if (isSpeech) {
-          if (this.lastSpeechTime == null) this.lastSpeechTime = now;
-          if (now - this.lastSpeechTime > 40) {
-            this.silenceStartTime = null;
-          }
-        } else {
-          this.lastSpeechTime = null;
-        }
+        this.silenceStartTime = null;
       }
     }
+
+    // 6) Atualiza estatísticas e envia para UI com o estado já consolidado.
+    const silenceDurationMs = this.isSilent ? Math.max(0, now - this.stateEnterTime) : 0;
+    const silenceCandidateMs = !this.isSilent && this.silenceStartTime
+      ? Math.max(0, now - this.silenceStartTime)
+      : 0;
+    this.updateStateStatistics({
+      rms,
+      zcr,
+      noiseFloor: this.noiseFloor,
+      speechScore,
+      dynamicThreshold,
+      isSpeech,
+      voiceBandRatio,
+      totalEnergy,
+      silenceDurationMs,
+      silenceCandidateMs
+    });
   }
 
   updateStateStatistics({
@@ -179,7 +168,8 @@ export class AudioStateManager {
     isSpeech,
     voiceBandRatio = 0,
     totalEnergy = 0,
-    silenceDurationMs = 0
+    silenceDurationMs = 0,
+    silenceCandidateMs = 0
   }) {
     const stats = this.stats;
     const newVolume = rms; // usamos RMS como "volume" lógico
@@ -222,6 +212,7 @@ export class AudioStateManager {
     stats.isSpeech = isSpeech;
     stats.isSilent = this.isSilent;
     stats.silenceDurationMs = silenceDurationMs;
+    stats.silenceCandidateMs = silenceCandidateMs;
     stats.smoothedSpeechScore = this.smoothedSpeechScore;
 
     this.emit('statsUpdate', { ...stats });

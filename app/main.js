@@ -31,6 +31,9 @@ export class App {
     this.currentSpeechStartedAt = 0;
     this.lastPartialProcessingMs = 0;
     this.partialIntervalCurrentMs = 0;
+    this.silenceStartedAtMs = 0;
+    this.silenceUiTicker = null;
+    this.pendingSilenceCommitTimer = null;
 
     this.init();
   }
@@ -111,12 +114,30 @@ export class App {
 
     this.audioState.subscribe('change', ({ isSilent, triggerDuration, silenceDuration }) => {
       if (isSilent) {
-        // Speech Ended
-        this.segmenter.stopSegment();
-        this.stopPartialScheduler();
-        this.backend.sendSilence();
-        this.ui.addLog(`Silence detected (triggered after ${triggerDuration}ms), sent to server`);
+        this.silenceStartedAtMs = Date.now();
+        const configuredMinSilence = Number(this.config.get('minSilence')) || 0;
+        const confirmMs = Math.max(80, Math.min(240, Math.round(configuredMinSilence * 0.35)));
+        if (this.pendingSilenceCommitTimer !== null) {
+          clearTimeout(this.pendingSilenceCommitTimer);
+          this.pendingSilenceCommitTimer = null;
+        }
+        this.pendingSilenceCommitTimer = setTimeout(() => {
+          this.pendingSilenceCommitTimer = null;
+          if (!this.audioState.isSilent) return;
+          // Speech Ended (confirmed)
+          this.segmenter.stopSegment();
+          this.stopPartialScheduler();
+          this.backend.sendSilence();
+          this.ui.addLog(
+            `Silence confirmed (trigger=${Math.round(triggerDuration || 0)}ms, min=${Math.round(configuredMinSilence)}ms, confirm=${confirmMs}ms), sent to server`
+          );
+        }, confirmMs);
       } else {
+        if (this.pendingSilenceCommitTimer !== null) {
+          clearTimeout(this.pendingSilenceCommitTimer);
+          this.pendingSilenceCommitTimer = null;
+        }
+        this.silenceStartedAtMs = 0;
         // Speech Started
         this.segmenter.startSegment();
         if (this.streamingActive) {
@@ -175,6 +196,7 @@ export class App {
         }
         this.ui.updatePartialIntervalCurrent(this.partialIntervalCurrentMs);
         const lapVoice = this.parseLapVoiceCommand(data.final);
+        this.pushTranscriptItem(this.createTranscriptItem('final', data.final));
         if (lapVoice.matched) {
           this.ui.addLog(`Voice Lap command detected: "${data.final}"`);
           this.addLapMarker(lapVoice.name);
@@ -182,7 +204,6 @@ export class App {
           this.ui.logProcessingStats('Final', data.stats);
           return;
         }
-        this.pushTranscriptItem(this.createTranscriptItem('final', data.final));
         this.ui.setPartial('');
         this.ui.logProcessingStats('Final', data.stats);
       }
@@ -416,6 +437,15 @@ export class App {
     try {
       this.streamingActive = true;
       this.currentLapId = this.generateLapId();
+      if (this.audioState.isSilent) this.silenceStartedAtMs = Date.now();
+      if (this.silenceUiTicker === null) {
+        this.silenceUiTicker = setInterval(() => {
+          const silenceDurationMs = this.audioState.isSilent
+            ? (this.silenceStartedAtMs ? Math.max(0, Date.now() - this.silenceStartedAtMs) : 0)
+            : (this.audioState.stats?.silenceCandidateMs || 0);
+          this.ui.updateSilenceDuration(silenceDurationMs, this.audioState.isSilent);
+        }, 120);
+      }
       if (!this.audioState.isSilent) {
         this.startPartialScheduler();
       }
@@ -425,10 +455,13 @@ export class App {
 
         // Atualiza indicadores de nível/estado usando stats correntes
         if (this.audioState.stats) {
+          const silenceDurationMs = this.audioState.isSilent
+            ? (this.silenceStartedAtMs ? Math.max(0, Date.now() - this.silenceStartedAtMs) : 0)
+            : (this.audioState.stats.silenceCandidateMs || 0);
           this.ui.updateIndicators(
             this.audioState.stats.rms,
             this.audioState.isSilent,
-            this.audioState.stats.silenceDurationMs || 0
+            silenceDurationMs
           );
         }
 
@@ -441,12 +474,26 @@ export class App {
       this.streamingActive = false;
       this.stopPartialScheduler();
       this.ui.setStatus('Error starting microphone: ' + err.message);
+      if (this.silenceUiTicker !== null) {
+        clearInterval(this.silenceUiTicker);
+        this.silenceUiTicker = null;
+      }
     }
   }
 
   stopStreaming() {
     this.streamingActive = false;
     this.stopPartialScheduler();
+    if (this.pendingSilenceCommitTimer !== null) {
+      clearTimeout(this.pendingSilenceCommitTimer);
+      this.pendingSilenceCommitTimer = null;
+    }
+    this.silenceStartedAtMs = 0;
+    if (this.silenceUiTicker !== null) {
+      clearInterval(this.silenceUiTicker);
+      this.silenceUiTicker = null;
+    }
+    this.ui.updateSilenceDuration(0, false);
     this.audioCapture.stop();
     this.segmenter.stopSegment(); // Ensure any pending segment is finalized
     this.backend.disconnect();

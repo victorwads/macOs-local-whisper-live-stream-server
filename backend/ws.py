@@ -118,6 +118,33 @@ def normalize_language(lang: str) -> str:
         
     return None
 
+
+def _normalize_segments(raw_segments) -> list[dict]:
+    if not isinstance(raw_segments, list):
+        return []
+    normalized = []
+    for seg in raw_segments:
+        if not isinstance(seg, dict):
+            continue
+        start = seg.get("start")
+        end = seg.get("end")
+        text = (seg.get("text") or "").strip()
+        try:
+            start_f = float(start)
+            end_f = float(end)
+        except (TypeError, ValueError):
+            continue
+        if end_f < start_f:
+            continue
+        normalized.append(
+            {
+                "start": round(start_f, 3),
+                "end": round(end_f, 3),
+                "text": text,
+            }
+        )
+    return normalized
+
 @router.websocket("/stream")
 async def websocket_endpoint(websocket: WebSocket) -> None:
     # await websocket.accept() # Moved down to avoid double accept if any logic before it fails or if we want to accept later
@@ -280,6 +307,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 process_time = time.time() - start_time
                 audio_duration = audio_segment.size / SAMPLE_RATE
                 text = (result.get("text") or "").strip()
+                segments = _normalize_segments(result.get("segments"))
 
                 if text in IGNORED_TEXTS:
                     text = ""
@@ -292,6 +320,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     await websocket.send_text(json.dumps({
                         "type": "final",
                         "final": text,
+                        "segments": segments,
                         "history": final_history,
                         "stats": {
                             "audio_duration": audio_duration,
@@ -359,6 +388,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             last_processing_ms = process_time * 1000.0
             audio_duration = audio_copy.size / SAMPLE_RATE
             text = (result.get("text") or "").strip()
+            segments = _normalize_segments(result.get("segments"))
 
             if text in IGNORED_TEXTS:
                 text = ""
@@ -379,6 +409,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     await websocket.send_text(json.dumps({
                         "type": "partial",
                         "text": text,
+                        "segments": segments,
                         "stats": {
                             "audio_duration": audio_duration,
                             "processing_time": process_time,

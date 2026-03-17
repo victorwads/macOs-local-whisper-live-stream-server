@@ -53,6 +53,7 @@ export class UIManager {
   addAudioLog(blobUrl: string, durationMs: number): void;
   updateAudioStats(stats: Record<string, any>): void;
   updateIndicators(level: number, isSilent: boolean, silenceDurationMs?: number): void;
+  updateSilenceDuration(silenceDurationMs?: number, isSilent?: boolean): void;
   updatePartialIntervalCurrent(partialIntervalMs: number): void;
   updateModelSelect(payload: UIModelPayload): void;
   setPartial(text: string): void;
