@@ -65,6 +65,8 @@ export class WhisperCppWasmBackendClient {
     this.segmentChunks = [];
     this.processing = false;
     this.processingQueue = [];
+    this.lastTranscribeAttemptAt = 0;
+    this.lastRuntimeResetAt = 0;
   }
 
   subscribe(event, callback) {
@@ -78,9 +80,6 @@ export class WhisperCppWasmBackendClient {
   async connect() {
     try {
       if (this.connected && this.whisper && this.modelManager && this.module) {
-        this.emit('open');
-        this.emit('message', { status: 'Connected to whisper.cpp WASM backend' });
-        this.requestModels();
         return;
       }
       this.connected = true;
@@ -326,30 +325,39 @@ export class WhisperCppWasmBackendClient {
         : (englishOnlyModel ? 'en' : (browserLanguageHint() !== 'auto' ? browserLanguageHint() : 'pt'));
       let result = null;
       let lastError = null;
-      for (let attempt = 0; attempt < 3; attempt++) {
+      for (let attempt = 0; attempt < 8; attempt++) {
         try {
+          this.lastTranscribeAttemptAt = Date.now();
           result = await this.whisper.transcribe(float32Audio, undefined, {
             language,
             translate: false,
-            threads: 2,
+            // Browser WASM builds are more stable with a single thread unless
+            // cross-origin isolation + pthreads are explicitly configured.
+            threads: 1,
           });
           lastError = null;
           break;
         } catch (err) {
           lastError = err;
-          const message = err?.message || String(err);
-          const recoverable = /already transcribing|wasm module not loaded|aborted/i.test(message);
-          if (!recoverable) break;
-          if (typeof this.whisper?.restartModel === 'function') {
-            try {
-              await this.whisper.restartModel();
-            } catch (_restartErr) {
-              // ignore and try full re-init below
+          const message = this.formatErrorMessage(err);
+          if (/already transcribing/i.test(message)) {
+            this.releaseBusyFlag('already-transcribing');
+            if (attempt >= 3) {
+              await this.resetTranscriptionRuntime('already-transcribing');
             }
+            await new Promise((resolve) => setTimeout(resolve, 150 * (attempt + 1)));
+            continue;
           }
-          this.loadedModelId = null;
-          await this.ensureModelReady();
-          await new Promise((resolve) => setTimeout(resolve, 60));
+          const recoverable = /wasm module not loaded|aborted|runtimeerror|memory access out of bounds/i.test(message);
+          if (!recoverable) break;
+          this.releaseBusyFlag('recoverable-error');
+          const isAbort = /aborted/i.test(message);
+          if (isAbort && attempt < 2) {
+            await new Promise((resolve) => setTimeout(resolve, 200 * (attempt + 1)));
+          } else {
+            await this.resetTranscriptionRuntime('recoverable-error');
+          }
+          await new Promise((resolve) => setTimeout(resolve, 80 * (attempt + 1)));
         }
       }
       if (!result && lastError) throw lastError;
@@ -366,9 +374,52 @@ export class WhisperCppWasmBackendClient {
       });
       this.emit('message', { type: 'language_update', language: language || 'auto' });
     } catch (err) {
-      const message = err?.message || String(err);
+      const message = this.formatErrorMessage(err);
+      this.releaseBusyFlag('final-error');
       this.emit('message', { error: `whisper.cpp WASM transcription failed: ${message}` });
       this.emit('error', err);
+    }
+  }
+
+  releaseBusyFlag(_reason = '') {
+    if (this.whisper && typeof this.whisper === 'object' && this.whisper.isTranscribing === true) {
+      this.whisper.isTranscribing = false;
+    }
+  }
+
+  async resetTranscriptionRuntime(reason = 'runtime-reset') {
+    const now = Date.now();
+    if (now - this.lastRuntimeResetAt < 1200) return;
+    this.lastRuntimeResetAt = now;
+    this.emit('message', { type: 'debug', status: `[whisper.cpp WASM] resetting runtime (${reason})` });
+    this.releaseBusyFlag(`pre-reset:${reason}`);
+    if (typeof this.whisper?.restartModel === 'function') {
+      try {
+        await this.whisper.restartModel();
+        this.releaseBusyFlag(`post-restart:${reason}`);
+        return;
+      } catch (_err) {
+        // fallback to full model re-init
+      }
+    }
+    this.loadedModelId = null;
+    this.modelInitPromise = null;
+    await this.ensureModelReady();
+    this.releaseBusyFlag(`post-reinit:${reason}`);
+  }
+
+  formatErrorMessage(err) {
+    if (!err) return 'Unknown error';
+    if (typeof err === 'string') return err;
+    if (typeof err?.message === 'string' && err.message.trim()) return err.message;
+    if (typeof err?.toString === 'function') {
+      const text = String(err.toString());
+      if (text && text !== '[object Object]') return text;
+    }
+    try {
+      return JSON.stringify(err);
+    } catch (_jsonErr) {
+      return String(err);
     }
   }
 

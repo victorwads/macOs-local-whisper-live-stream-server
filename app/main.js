@@ -38,7 +38,8 @@ export class App {
     this.partialIntervalCurrentMs = 0;
     this.partialsSinceLastFinal = 0;
     this.pendingFinalSegments = 0;
-    this.audioFileProcessor = new AudioFileProcessor({ targetSampleRate: 16000, speed: 10, chunkSize: 8192 });
+    // File mode needs finer chunk cadence so VAD can detect short pauses reliably.
+    this.audioFileProcessor = new AudioFileProcessor({ targetSampleRate: 16000, speed: 10, chunkSize: 2048 });
     this.processingMode = 'idle'; // idle | mic | file
     this.fileCheckpointStorageKey = 'whisper:file-process:checkpoint:v1';
     this.currentFileKey = null;
@@ -53,6 +54,7 @@ export class App {
     this.silenceStartedAtMs = 0;
     this.silenceUiTicker = null;
     this.pendingSilenceCommitTimer = null;
+    this.backendConnected = false;
 
     this.init();
   }
@@ -233,13 +235,17 @@ export class App {
 
     // WebSocket Events
     this.backend.subscribe('open', () => {
+      this.backendConnected = true;
       this.ui.setStatus('Connected to backend');
       this.backend.setParams(this.buildBackendParams());
       this.backend.selectModel(this.config.get('model'));
       this.backend.requestModels();
     });
 
-    this.backend.subscribe('close', () => this.ui.setStatus('Backend connection closed'));
+    this.backend.subscribe('close', () => {
+      this.backendConnected = false;
+      this.ui.setStatus('Backend connection closed');
+    });
     this.backend.subscribe('error', () => this.ui.setStatus('Backend error'));
     
     this.backend.subscribe('message', (data) => {
@@ -335,6 +341,10 @@ export class App {
         this.ui.addLog(data.status || 'debug');
       }
       if (data.error) {
+        if (this.processingMode === 'file' && this.pendingFinalSegments > 0) {
+          this.pendingFinalSegments -= 1;
+          this.updatePipelineStatus();
+        }
         this.ui.setStatus(`Server error: ${data.error}`);
       }
     });
@@ -787,19 +797,10 @@ export class App {
     this.ui.setFileProgress(0, 0, false);
     this.updatePipelineStatus();
 
-    const originalMinSpeak = this.audioState.minSpeak;
-    const originalMinSilence = this.audioState.minSilence;
-    const tunedMinSpeak = Math.max(300, originalMinSpeak);
-    const tunedMinSilence = Math.max(1500, originalMinSilence);
-
     try {
-      // File mode can use larger windows while preserving silence/speech rules in audio time.
-      this.audioState.updateConfig('minSpeak', tunedMinSpeak);
-      this.audioState.updateConfig('minSilence', tunedMinSilence);
-      this.segmenter.updateConfig('minSpeak', tunedMinSpeak);
-      this.segmenter.updateConfig('minSilence', tunedMinSilence);
-
-      await this.backend.connect();
+      if (!this.backendConnected) {
+        await this.backend.connect();
+      }
       this.backend.setParams(this.buildBackendParams('file'));
       this.backend.selectModel(this.config.get('model'));
 
@@ -848,10 +849,6 @@ export class App {
     } catch (err) {
       this.ui.setStatus(`File processing error: ${err.message}`);
     } finally {
-      this.audioState.updateConfig('minSpeak', originalMinSpeak);
-      this.audioState.updateConfig('minSilence', originalMinSilence);
-      this.segmenter.updateConfig('minSpeak', originalMinSpeak);
-      this.segmenter.updateConfig('minSilence', originalMinSilence);
       this.streamingActive = false;
       this.processingMode = 'idle';
       this.currentFileKey = null;
@@ -884,7 +881,23 @@ export class App {
       ? this.fileCurrentAudioMs
       : Date.now();
 
-    this.audioState.processAudio(chunk, sampleRate, nowMs);
+    if (this.processingMode === 'file') {
+      const vadFrameSamples = Math.max(256, Math.min(1024, Math.round(sampleRate * 0.032)));
+      const chunkDurationMs = Number.isFinite(meta?.chunkDurationMs)
+        ? Number(meta.chunkDurationMs)
+        : ((chunk.length / sampleRate) * 1000);
+      const chunkStartMs = nowMs - chunkDurationMs;
+
+      for (let offset = 0; offset < chunk.length; offset += vadFrameSamples) {
+        const frame = chunk.subarray(offset, Math.min(offset + vadFrameSamples, chunk.length));
+        const frameEndMs = chunkStartMs + (((offset + frame.length) / sampleRate) * 1000);
+        this.audioState.processAudio(frame, sampleRate, frameEndMs);
+        this.segmenter.processChunk(frame);
+      }
+    } else {
+      this.audioState.processAudio(chunk, sampleRate, nowMs);
+      this.segmenter.processChunk(chunk);
+    }
 
     if (this.audioState.stats) {
       const silenceDurationMs = this.audioState.isSilent
@@ -897,7 +910,6 @@ export class App {
       );
     }
 
-    this.segmenter.processChunk(chunk);
     // File mode safeguard: if silence detection misses long stretches,
     // force a segment cut using maxSeconds to avoid huge 1-shot transcriptions.
     if (this.processingMode === 'file' && this.streamingActive && !this.audioState.isSilent && this.segmenter.isRecording) {

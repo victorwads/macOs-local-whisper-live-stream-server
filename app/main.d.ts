@@ -34,6 +34,7 @@ export class App {
   silenceStartedAtMs: number;
   silenceUiTicker: number | null;
   pendingSilenceCommitTimer: number | null;
+  backendConnected: boolean;
   constructor();
   init(): void;
   hydrateTranscript(): void;
