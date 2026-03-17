@@ -40,6 +40,7 @@ export class UIManager {
       statIsSilent: document.getElementById('statIsSilent'),
       log: document.getElementById('log'),
       partialTranscript: document.getElementById('partialTranscript'),
+      pipelineStatus: document.getElementById('pipelineStatus'),
     };
 
     this.listeners = {
@@ -388,6 +389,11 @@ export class UIManager {
       this.dom.partialTranscript.classList.remove('has-text');
     }
     this.scrollTranscriptToBottom();
+  }
+
+  setPipelineStatus(text) {
+    if (!this.dom.pipelineStatus) return;
+    this.dom.pipelineStatus.textContent = text || '';
   }
 
   setTranscriptItems(items) {

@@ -364,6 +364,15 @@ button:hover { opacity: 0.9; }
     vertical-align: middle;
 }
 
+.pipeline-status {
+    margin-top: 4px;
+    font-size: 0.8rem;
+    color: #1d4ed8;
+    min-height: 1.1rem;
+    font-family: 'Consolas', 'Monaco', monospace;
+    opacity: 0.9;
+}
+
 @keyframes transcript-spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }

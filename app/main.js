@@ -32,6 +32,7 @@ export class App {
     this.lastPartialProcessingMs = 0;
     this.partialIntervalCurrentMs = 0;
     this.partialsSinceLastFinal = 0;
+    this.pendingFinalSegments = 0;
     this.silenceStartedAtMs = 0;
     this.silenceUiTicker = null;
     this.pendingSilenceCommitTimer = null;
@@ -88,6 +89,8 @@ export class App {
         // 3. Send select_model
         this.backend.selectModel(value);
         this.partialsSinceLastFinal = 0;
+        this.pendingFinalSegments = 0;
+        this.updatePipelineStatus();
 
         if (previousModel && value && previousModel !== value) {
           const message = `Mudou do modelo ${previousModel} para ${value}`;
@@ -136,6 +139,7 @@ export class App {
           this.segmenter.stopSegment();
           this.stopPartialScheduler();
           this.backend.sendSilence();
+          this.updatePipelineStatus();
           this.ui.addLog(
             `Silence confirmed (trigger=${Math.round(triggerDuration || 0)}ms, min=${Math.round(configuredMinSilence)}ms, confirm=${confirmMs}ms), sent to server`
           );
@@ -154,6 +158,7 @@ export class App {
         if (silenceDuration) {
             this.ui.addLog(`Resuming speech after ${silenceDuration}ms of silence`);
         }
+        this.updatePipelineStatus();
       }
     });
 
@@ -167,6 +172,8 @@ export class App {
       const blob = new Blob([wavView], { type: 'audio/wav' });
       const url = URL.createObjectURL(blob);
       this.ui.addAudioLog(url, duration);
+      this.pendingFinalSegments += 1;
+      this.updatePipelineStatus();
     });
 
     // WebSocket Events
@@ -200,6 +207,10 @@ export class App {
         this.ui.logProcessingStats('Partial', data.stats);
       }
       if (data.type === 'final' && data.final !== undefined) {
+        if (this.pendingFinalSegments > 0) {
+          this.pendingFinalSegments -= 1;
+        }
+        this.updatePipelineStatus();
         const partialsCountForFinal = this.partialsSinceLastFinal;
         this.partialsSinceLastFinal = 0;
         if (data.stats?.partial_interval_ms !== undefined) {
@@ -342,9 +353,39 @@ export class App {
     this.lastFinalText = '';
     this.lapCount = 0;
     this.currentLapId = this.generateLapId();
+    this.pendingFinalSegments = 0;
     this.ui.setTranscriptItems([]);
     this.ui.setPartial('');
+    this.ui.setPipelineStatus('');
     this.ui.addLog('Transcript storage cleared.');
+  }
+
+  updatePipelineStatus() {
+    if (!this.streamingActive) {
+      this.ui.setPipelineStatus('');
+      return;
+    }
+
+    const pending = Math.max(0, this.pendingFinalSegments);
+    const isSpeakingNow = !this.audioState.isSilent;
+
+    if (isSpeakingNow) {
+      if (pending > 0) {
+        const suffix = pending === 1 ? '1 segmento em processamento' : `${pending} segmentos em processamento`;
+        this.ui.setPipelineStatus(`Gravando novo segmento... (${suffix})`);
+      } else {
+        this.ui.setPipelineStatus('Gravando novo segmento...');
+      }
+      return;
+    }
+
+    if (pending > 0) {
+      const label = pending === 1 ? '1 segmento' : `${pending} segmentos`;
+      this.ui.setPipelineStatus(`Processando ${label}...`);
+      return;
+    }
+
+    this.ui.setPipelineStatus('');
   }
 
   async copyLastLapToClipboard() {
@@ -485,7 +526,9 @@ export class App {
     try {
       this.streamingActive = true;
       this.partialsSinceLastFinal = 0;
+      this.pendingFinalSegments = 0;
       this.currentLapId = this.generateLapId();
+      this.updatePipelineStatus();
       if (this.audioState.isSilent) this.silenceStartedAtMs = Date.now();
       if (this.silenceUiTicker === null) {
         this.silenceUiTicker = setInterval(() => {
@@ -533,6 +576,7 @@ export class App {
   stopStreaming() {
     this.streamingActive = false;
     this.partialsSinceLastFinal = 0;
+    this.pendingFinalSegments = 0;
     this.stopPartialScheduler();
     if (this.pendingSilenceCommitTimer !== null) {
       clearTimeout(this.pendingSilenceCommitTimer);
@@ -544,6 +588,7 @@ export class App {
       this.silenceUiTicker = null;
     }
     this.ui.updateSilenceDuration(0, false);
+    this.ui.setPipelineStatus('');
     this.audioCapture.stop();
     this.segmenter.stopSegment(); // Ensure any pending segment is finalized
     this.backend.disconnect();

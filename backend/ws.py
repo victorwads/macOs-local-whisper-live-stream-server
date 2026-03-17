@@ -317,18 +317,19 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
                 if text:
                     final_history.append(text)
-                    await websocket.send_text(json.dumps({
-                        "type": "final",
-                        "final": text,
-                        "segments": segments,
-                        "history": final_history,
-                        "stats": {
-                            "audio_duration": audio_duration,
-                            "processing_time": process_time,
-                            "processing_time_ms": int(round(process_time * 1000)),
-                            "partial_interval_ms": int(round(partial_interval_current_ms)),
-                        }
-                    }))
+                await websocket.send_text(json.dumps({
+                    "type": "final",
+                    "final": text,
+                    "segments": segments,
+                    "history": final_history,
+                    "discarded": not bool(text),
+                    "stats": {
+                        "audio_duration": audio_duration,
+                        "processing_time": process_time,
+                        "processing_time_ms": int(round(process_time * 1000)),
+                        "partial_interval_ms": int(round(partial_interval_current_ms)),
+                    }
+                }))
             except Exception as exc:
                 logger.error("Transcription failed: %s", exc, exc_info=True)
                 await websocket.send_text(json.dumps({"error": str(exc)}))

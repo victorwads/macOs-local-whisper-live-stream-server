@@ -18,6 +18,7 @@ export class App {
   lastPartialProcessingMs: number;
   partialIntervalCurrentMs: number;
   partialsSinceLastFinal: number;
+  pendingFinalSegments: number;
   silenceStartedAtMs: number;
   silenceUiTicker: number | null;
   pendingSilenceCommitTimer: number | null;
@@ -38,6 +39,7 @@ export class App {
   parseCopyVoiceCommand(finalText: string): { matched: boolean };
   extractProcessingTimeMs(stats: any): number | null;
   extractAudioDurationSec(stats: any): number | null;
+  updatePipelineStatus(): void;
   cleanLapName(rawName: string): string;
   resetTranscriptStorage(): void;
   copyLastLapToClipboard(): Promise<void>;

@@ -57,6 +57,7 @@ export class UIManager {
   updatePartialIntervalCurrent(partialIntervalMs: number): void;
   updateModelSelect(payload: UIModelPayload): void;
   setPartial(text: string): void;
+  setPipelineStatus(text: string): void;
   setTranscriptItems(items: TranscriptItem[]): void;
   addTranscriptItem(item: TranscriptItem): void;
   formatTimestamp(ts: number): string;
