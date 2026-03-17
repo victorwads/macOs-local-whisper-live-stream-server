@@ -576,30 +576,32 @@ export class UIManager {
     text.className = 'transcript-text';
     text.textContent = item.text;
 
+    const isSilence = item.type === 'silence';
+
     const partials = document.createElement('span');
     partials.className = 'transcript-meta-partials';
-    const partialsLabel = this.formatPartialsSent(item.partialsSent);
+    const partialsLabel = isSilence ? '' : this.formatPartialsSent(item.partialsSent);
     if (partialsLabel) {
       partials.textContent = ` ${partialsLabel}`;
     }
 
     const processing = document.createElement('span');
     processing.className = 'transcript-meta-processing';
-    const processingLabel = this.formatProcessingTime(item.processingTimeMs);
+    const processingLabel = isSilence ? '' : this.formatProcessingTime(item.processingTimeMs);
     if (processingLabel) {
       processing.textContent = ` ${processingLabel}`;
     }
 
     const rate = document.createElement('span');
     rate.className = 'transcript-meta-rate';
-    const rateLabel = this.formatTranslateRate(item.audioDurationSec, item.processingTimeMs);
+    const rateLabel = isSilence ? '' : this.formatTranslateRate(item.audioDurationSec, item.processingTimeMs);
     if (rateLabel) {
       rate.textContent = ` ${rateLabel}`;
     }
 
     const avgWord = document.createElement('span');
     avgWord.className = 'transcript-meta-wordtime';
-    const avgWordLabel = this.formatAvgTimePerWord(item.audioDurationSec, item.text);
+    const avgWordLabel = isSilence ? '' : this.formatAvgTimePerWord(item.audioDurationSec, item.text);
     if (avgWordLabel) {
       avgWord.textContent = ` ${avgWordLabel}`;
     }

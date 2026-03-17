@@ -29,19 +29,25 @@ export class App {
   fileNextPartialAtAudioMs: number;
   fileTranscriptOffsetSec: number | null;
   fileCheckpointLastSavedSec: number;
+  fileVadFrameMs: number;
+  fileVadChunkDurationMs: number;
   pendingSegmentMetaQueue: Array<{ startSec: number | null; endSec: number | null; durationSec: number }>;
   modelLoadUiActive: boolean;
   silenceStartedAtMs: number;
   silenceUiTicker: number | null;
   pendingSilenceCommitTimer: number | null;
   backendConnected: boolean;
+  pendingSilenceChunks: Float32Array[];
+  pendingSilenceSamples: number;
+  pendingSilenceStartSec: number | null;
+  pendingSilenceSampleRate: number;
   constructor();
   init(): void;
   hydrateTranscript(): void;
   setupEvents(): void;
   addLapMarker(lapName?: string): void;
   createTranscriptItem(
-    type: "final" | "lap" | "model_change",
+    type: "final" | "lap" | "model_change" | "silence",
     text: string,
     lapId?: string,
     meta?: {
@@ -95,6 +101,15 @@ export class App {
     sampleRate: number,
     meta?: { audioTimeMs?: number; chunkDurationMs?: number } | null
   ): void;
+  resolveFileChunkTiming(
+    chunk: Float32Array,
+    sampleRate: number,
+    meta?: { audioTimeMs?: number; chunkDurationMs?: number } | null
+  ): { audioTimeMs: number; chunkDurationMs: number };
+  logFileVadEvent(eventName: string, extras?: Record<string, unknown>): void;
+  resetPendingSilenceCollector(): void;
+  collectPendingSilenceChunk(chunk: Float32Array, sampleRate: number, nowMs: number): void;
+  flushPendingSilenceSegment(reason?: string): Promise<void>;
   waitForFileBackpressure(): Promise<void>;
   startStreaming(): Promise<void>;
   stopStreaming(): void;

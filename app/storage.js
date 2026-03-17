@@ -115,7 +115,7 @@ function isValidTranscriptItem(value) {
   const item = value;
   if (typeof item.lapId !== 'string') return false;
   if (typeof item.id !== 'string') return false;
-  if (item.type !== 'final' && item.type !== 'lap' && item.type !== 'model_change') return false;
+  if (item.type !== 'final' && item.type !== 'lap' && item.type !== 'model_change' && item.type !== 'silence') return false;
   if (typeof item.text !== 'string') return false;
   if (typeof item.createdAt !== 'number') return false;
   return true;
@@ -139,7 +139,7 @@ function normalizeTranscriptItem(value) {
   const item = value;
   const hasCoreFields =
     typeof item.id === 'string' &&
-    (item.type === 'final' || item.type === 'lap' || item.type === 'model_change') &&
+    (item.type === 'final' || item.type === 'lap' || item.type === 'model_change' || item.type === 'silence') &&
     typeof item.text === 'string' &&
     typeof item.createdAt === 'number';
 

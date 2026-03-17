@@ -1,4 +1,4 @@
-export type TranscriptItemType = "final" | "lap" | "model_change";
+export type TranscriptItemType = "final" | "lap" | "model_change" | "silence";
 
 export interface TranscriptItem {
   id: string;
@@ -13,4 +13,5 @@ export interface TranscriptItem {
   partialsSent?: number | null;
   relativeTimeSec?: number | null;
   sourceFileKey?: string | null;
+  audioId?: string | null;
 }
