@@ -127,6 +127,7 @@ export class WhisperCppWasmBackendClient {
   selectModel(model) {
     const selected = mapToModelId(model, this.availableModels.map((m) => m.id));
     if (!selected) return;
+    const sameModel = selected === this.currentModelId;
     this.currentModelId = selected;
     this.modelLoadTicket += 1;
     if (this.loadedModelId !== selected) {
@@ -134,7 +135,9 @@ export class WhisperCppWasmBackendClient {
     }
     this.emit('message', { status: `switching to ${selected}` });
     this.requestModels();
-    this.preloadSelectedModel();
+    if (!sameModel || this.loadedModelId !== selected) {
+      this.preloadSelectedModel();
+    }
   }
 
   requestModels() {
@@ -303,6 +306,8 @@ export class WhisperCppWasmBackendClient {
       while (this.processingQueue.length) {
         const segment = this.processingQueue.shift();
         await this.transcribeSegment(segment);
+        // Small cooldown to avoid "Already transcribing" races in wasm runtime.
+        await new Promise((resolve) => setTimeout(resolve, 25));
       }
     } finally {
       this.processing = false;

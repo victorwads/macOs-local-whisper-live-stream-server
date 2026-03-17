@@ -53,10 +53,10 @@ export class AudioFileProcessor {
         const chunk = streamData.subarray(i, Math.min(i + this.chunkSize, streamData.length));
         const chunkMs = (chunk.length / this.targetSampleRate) * 1000;
         audioTimeMs += chunkMs;
-        handlers.onChunk?.(chunk, this.targetSampleRate, {
+        await Promise.resolve(handlers.onChunk?.(chunk, this.targetSampleRate, {
           audioTimeMs,
           chunkDurationMs: chunkMs,
-        });
+        }));
 
         const delayMs = Math.max(0, Math.round(chunkMs / this.speed));
         if (delayMs > 0) {

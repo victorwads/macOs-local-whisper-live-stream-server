@@ -818,8 +818,11 @@ export class App {
         },
         onStatus: (status) => this.ui.setStatus(status),
         onLog: (message) => this.ui.addLog(message),
-        onChunk: (chunk, sampleRate, meta) => this.handleIncomingAudioChunk(chunk, sampleRate, meta),
-      }, { startAtSec: resumeAtSec });
+	        onChunk: async (chunk, sampleRate, meta) => {
+	          this.handleIncomingAudioChunk(chunk, sampleRate, meta);
+	          await this.waitForFileBackpressure();
+	        },
+	      }, { startAtSec: resumeAtSec });
 
 	      // Finalize remaining buffered speech from file stream.
 	      this.segmenter.stopSegment();
@@ -909,6 +912,19 @@ export class App {
     }
     if (this.processingMode === 'file') {
       this.maybeTriggerFilePartial(nowMs);
+    }
+  }
+
+  async waitForFileBackpressure() {
+    if (!this.streamingActive || this.processingMode !== 'file') return;
+    const maxPendingSegments = 2;
+    const started = Date.now();
+    while (this.streamingActive && this.processingMode === 'file' && this.pendingFinalSegments > maxPendingSegments) {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      if (Date.now() - started > 15000) {
+        this.ui.addLog('Waiting backend queue to drain...');
+        break;
+      }
     }
   }
 

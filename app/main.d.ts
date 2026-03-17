@@ -93,6 +93,7 @@ export class App {
     sampleRate: number,
     meta?: { audioTimeMs?: number; chunkDurationMs?: number } | null
   ): void;
+  waitForFileBackpressure(): Promise<void>;
   startStreaming(): Promise<void>;
   stopStreaming(): void;
 }

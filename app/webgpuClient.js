@@ -104,6 +104,7 @@ export class WebGPUBackendClient {
     this.processingQueue = [];
     this.progressState = new Map();
     this.currentModelLoad = null;
+    this.pipelineLoadToken = 0;
   }
 
   subscribe(event, callback) {
@@ -127,6 +128,7 @@ export class WebGPUBackendClient {
   }
 
   disconnect() {
+    this.releasePipeline();
     this.connected = false;
     this.emit('close');
   }
@@ -145,18 +147,21 @@ export class WebGPUBackendClient {
 
   selectModel(model) {
     const preset = findPreset(model);
+    const sameModel = preset.key === this.currentPreset.key;
     this.currentPreset = preset;
     this.emit('message', { status: `switching to ${preset.label}` });
-    if (this.pipelineModelKey && this.pipelineModelKey !== preset.key) {
-      this.pipeline = null;
-      this.pipelineModelKey = null;
+    if (this.pipeline && this.pipelineModelKey && this.pipelineModelKey !== preset.key) {
+      this.releasePipeline();
     }
     if (this.pipelineLoadingKey && this.pipelineLoadingKey !== preset.key) {
+      this.pipelineLoadToken += 1;
       this.pipelineLoadingPromise = null;
       this.pipelineLoadingKey = null;
     }
     this.emit('message', { status: `model loaded ${preset.label}` });
-    this.preloadSelectedModel();
+    if (!sameModel || this.pipelineModelKey !== preset.key) {
+      this.preloadSelectedModel();
+    }
   }
 
   requestModels() {
@@ -244,6 +249,7 @@ export class WebGPUBackendClient {
   }
 
   async loadPipelineForCurrentPreset() {
+    const loadToken = this.pipelineLoadToken;
     const targetKey = this.currentPreset.key;
     const targetPreset = this.currentPreset;
     this.currentModelLoad = {
@@ -451,7 +457,10 @@ export class WebGPUBackendClient {
         });
       }
     }
-    if (this.currentPreset.key === targetKey) {
+    if (this.currentPreset.key === targetKey && this.pipelineLoadToken === loadToken) {
+      if (this.pipeline && this.pipeline !== loadedPipeline) {
+        this.releasePipeline();
+      }
       this.emit('message', {
         type: 'model_load_state',
         backend: 'webgpu',
@@ -481,6 +490,12 @@ export class WebGPUBackendClient {
         fromCacheLikely,
       });
       this.emitStorageInfo();
+    } else {
+      this.disposePipelineInstance(loadedPipeline);
+      this.emit('message', {
+        type: 'debug',
+        status: `[WebGPU] Discarded stale pipeline for ${targetPreset.label}.`,
+      });
     }
     this.currentModelLoad = null;
     return loadedPipeline;
@@ -527,6 +542,7 @@ export class WebGPUBackendClient {
   }
 
   async clearCachedData() {
+    this.releasePipeline();
     try {
       localStorage.removeItem(WEBGPU_CACHE_KEY);
     } catch (_err) {
@@ -561,10 +577,9 @@ export class WebGPUBackendClient {
       }
     }
 
-    this.pipeline = null;
-    this.pipelineModelKey = null;
     this.pipelineLoadingPromise = null;
     this.pipelineLoadingKey = null;
+    this.pipelineLoadToken += 1;
     this.progressState.clear();
     this.emit('message', { status: 'WebGPU cache data cleared.' });
     this.requestModels();
@@ -640,6 +655,32 @@ export class WebGPUBackendClient {
       localStorage.setItem(WEBGPU_CACHE_KEY, JSON.stringify(installed));
     } catch (_err) {
       // ignore storage errors
+    }
+  }
+
+  releasePipeline() {
+    if (this.pipeline) {
+      this.disposePipelineInstance(this.pipeline);
+    }
+    this.pipeline = null;
+    this.pipelineModelKey = null;
+  }
+
+  disposePipelineInstance(instance) {
+    if (!instance) return;
+    try {
+      if (typeof instance.dispose === 'function') {
+        instance.dispose();
+      }
+    } catch (_err) {
+      // ignore dispose errors
+    }
+    try {
+      if (instance.model && typeof instance.model.dispose === 'function') {
+        instance.model.dispose();
+      }
+    } catch (_err) {
+      // ignore nested dispose errors
     }
   }
 }
