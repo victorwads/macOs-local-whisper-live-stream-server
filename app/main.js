@@ -31,6 +31,7 @@ export class App {
     this.currentSpeechStartedAt = 0;
     this.lastPartialProcessingMs = 0;
     this.partialIntervalCurrentMs = 0;
+    this.partialsSinceLastFinal = 0;
     this.silenceStartedAtMs = 0;
     this.silenceUiTicker = null;
     this.pendingSilenceCommitTimer = null;
@@ -85,6 +86,7 @@ export class App {
         
         // 3. Send select_model
         this.backend.selectModel(value);
+        this.partialsSinceLastFinal = 0;
         
         // 4. Update UI inputs (because they might have old values)
         this.ui.updateInputs(); 
@@ -181,6 +183,7 @@ export class App {
       }
       if (data.type === 'partial') {
         this.ui.setPartial(data.text);
+        this.partialsSinceLastFinal += 1;
         if (data.stats?.processing_time_ms !== undefined) {
           this.lastPartialProcessingMs = data.stats.processing_time_ms;
         }
@@ -191,6 +194,8 @@ export class App {
         this.ui.logProcessingStats('Partial', data.stats);
       }
       if (data.type === 'final' && data.final !== undefined) {
+        const partialsCountForFinal = this.partialsSinceLastFinal;
+        this.partialsSinceLastFinal = 0;
         if (data.stats?.partial_interval_ms !== undefined) {
           this.partialIntervalCurrentMs = data.stats.partial_interval_ms;
         }
@@ -207,6 +212,7 @@ export class App {
         this.pushTranscriptItem(this.createTranscriptItem('final', data.final, this.currentLapId, {
           processingTimeMs: this.extractProcessingTimeMs(data.stats),
           audioDurationSec: this.extractAudioDurationSec(data.stats),
+          partialsSent: partialsCountForFinal,
         }));
         if (lapVoice.matched) {
           this.ui.addLog(`Voice Lap command detected: "${data.final}"`);
@@ -258,6 +264,7 @@ export class App {
       lapId,
       processingTimeMs: meta.processingTimeMs ?? null,
       audioDurationSec: meta.audioDurationSec ?? null,
+      partialsSent: meta.partialsSent ?? null,
     };
   }
 
@@ -471,6 +478,7 @@ export class App {
   async startStreaming() {
     try {
       this.streamingActive = true;
+      this.partialsSinceLastFinal = 0;
       this.currentLapId = this.generateLapId();
       if (this.audioState.isSilent) this.silenceStartedAtMs = Date.now();
       if (this.silenceUiTicker === null) {
@@ -518,6 +526,7 @@ export class App {
 
   stopStreaming() {
     this.streamingActive = false;
+    this.partialsSinceLastFinal = 0;
     this.stopPartialScheduler();
     if (this.pendingSilenceCommitTimer !== null) {
       clearTimeout(this.pendingSilenceCommitTimer);

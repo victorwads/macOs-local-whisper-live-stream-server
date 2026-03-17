@@ -17,6 +17,7 @@ export class App {
   currentSpeechStartedAt: number;
   lastPartialProcessingMs: number;
   partialIntervalCurrentMs: number;
+  partialsSinceLastFinal: number;
   silenceStartedAtMs: number;
   silenceUiTicker: number | null;
   pendingSilenceCommitTimer: number | null;
@@ -29,7 +30,7 @@ export class App {
     type: "final" | "lap",
     text: string,
     lapId?: string,
-    meta?: { processingTimeMs?: number | null; audioDurationSec?: number | null }
+    meta?: { processingTimeMs?: number | null; audioDurationSec?: number | null; partialsSent?: number | null }
   ): TranscriptItem;
   pushTranscriptItem(item: TranscriptItem): void;
   generateLapId(): string;

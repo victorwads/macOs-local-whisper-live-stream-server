@@ -53,6 +53,7 @@ function normalizeTranscriptItem(value) {
       ...item,
       processingTimeMs: normalizeNullableNumber(item.processingTimeMs),
       audioDurationSec: normalizeNullableNumber(item.audioDurationSec),
+      partialsSent: normalizeNullableNumber(item.partialsSent),
     };
   }
 
@@ -70,6 +71,7 @@ function normalizeTranscriptItem(value) {
     lapId: typeof item.lapId === 'string' ? item.lapId : `legacy-${item.id}`,
     processingTimeMs: normalizeNullableNumber(item.processingTimeMs),
     audioDurationSec: normalizeNullableNumber(item.audioDurationSec),
+    partialsSent: normalizeNullableNumber(item.partialsSent),
   };
 }
 

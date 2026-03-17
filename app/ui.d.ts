@@ -61,6 +61,7 @@ export class UIManager {
   addTranscriptItem(item: TranscriptItem): void;
   formatTimestamp(ts: number): string;
   formatProcessingTime(processingTimeMs: number | null | undefined): string;
+  formatPartialsSent(partialsSent: number | null | undefined): string;
   addFinal(text: string): void;
   clearFinals(): void;
   scrollTranscriptToBottom(): void;

@@ -441,8 +441,15 @@ export class UIManager {
     text.className = 'transcript-text';
     text.textContent = item.text;
 
+    const partials = document.createElement('span');
+    partials.className = 'transcript-meta-partials';
+    const partialsLabel = this.formatPartialsSent(item.partialsSent);
+    if (partialsLabel) {
+      partials.textContent = ` ${partialsLabel}`;
+    }
+
     const processing = document.createElement('span');
-    processing.className = 'transcript-processing-meta';
+    processing.className = 'transcript-meta-processing';
     const processingLabel = this.formatProcessingTime(item.processingTimeMs);
     if (processingLabel) {
       processing.textContent = ` ${processingLabel}`;
@@ -450,6 +457,7 @@ export class UIManager {
 
     line.appendChild(timestamp);
     line.appendChild(text);
+    if (partialsLabel) line.appendChild(partials);
     if (processingLabel) line.appendChild(processing);
     this.dom.final.appendChild(line);
     this.scrollTranscriptToBottom();
@@ -464,6 +472,14 @@ export class UIManager {
     if (!Number.isFinite(processingTimeMs) || processingTimeMs <= 0) return '';
     if (processingTimeMs < 1000) return `(${Math.round(processingTimeMs)} ms)`;
     return `(${(processingTimeMs / 1000).toFixed(2)} s)`;
+  }
+
+  formatPartialsSent(partialsSent) {
+    if (!Number.isFinite(partialsSent) || partialsSent < 0) return '';
+    const count = Math.round(partialsSent);
+    if (count === 0) return '0 parciais';
+    if (count === 1) return '1 parcial';
+    return `${count} parciais`;
   }
 
   addFinal(text) {
