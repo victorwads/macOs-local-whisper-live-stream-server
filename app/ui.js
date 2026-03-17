@@ -10,6 +10,7 @@ export class UIManager {
       stopBtn: document.getElementById('stopBtn'),
       clearStorageBtn: document.getElementById('clearStorageBtn'),
       clearWebGpuDataBtn: document.getElementById('clearWebGpuDataBtn'),
+      clearAudioDataBtn: document.getElementById('clearAudioDataBtn'),
       exportTxtBtn: document.getElementById('exportTxtBtn'),
       copyLastLapBtn: document.getElementById('copyLastLapBtn'),
       autoScrollToggle: document.getElementById('autoScrollToggle'),
@@ -62,6 +63,7 @@ export class UIManager {
       stop: [],
       clearStorage: [],
       clearWebGpuData: [],
+      clearAudioData: [],
       exportTxt: [],
       copyLastLap: [],
       copySubject: [],
@@ -115,6 +117,7 @@ export class UIManager {
     this.dom.stopBtn?.addEventListener('click', () => this.emit('stop'));
     this.dom.clearStorageBtn?.addEventListener('click', () => this.emit('clearStorage'));
     this.dom.clearWebGpuDataBtn?.addEventListener('click', () => this.emit('clearWebGpuData'));
+    this.dom.clearAudioDataBtn?.addEventListener('click', () => this.emit('clearAudioData'));
     this.dom.exportTxtBtn?.addEventListener('click', () => this.emit('exportTxt'));
     this.dom.copyLastLapBtn?.addEventListener('click', () => this.emit('copyLastLap'));
     this.dom.autoScrollToggle?.addEventListener('change', () => {
@@ -403,10 +406,11 @@ export class UIManager {
         const familyLabel = looksWhisperModel
           ? (lower.includes('.en') ? 'EN-only' : 'Multilingual')
           : '';
-        const sizeGb = installedInfo?.[m]?.size_gb;
-        const sizeLabel = isInstalled && Number.isFinite(sizeGb)
-          ? ` - ${sizeGb < 1 ? sizeGb.toFixed(2) : sizeGb.toFixed(1)} GB`
-          : '';
+        const sizeBytes = Number.isFinite(installedInfo?.[m]?.size_bytes)
+          ? Number(installedInfo[m].size_bytes)
+          : (Number.isFinite(installedInfo?.[m]?.size_gb) ? Number(installedInfo[m].size_gb) * 1e9 : null);
+        const sizeValue = isInstalled ? this.formatStorageSize(sizeBytes) : null;
+        const sizeLabel = sizeValue ? ` - ${sizeValue}` : '';
         const suffix = `${isInstalled ? ` (installed${sizeLabel})` : ''}${familyLabel ? ` [${familyLabel}]` : ''}`;
         opt.textContent = `${m}${suffix}`;
         if (m === current) opt.selected = true;
@@ -434,15 +438,34 @@ export class UIManager {
   }
 
   setWebGpuStorageInfo(info) {
-    if (!this.dom.clearWebGpuDataBtn) return;
-    if (!info || typeof info !== 'object') {
-      this.dom.clearWebGpuDataBtn.textContent = 'Clear Models Data';
-      return;
+    if (this.dom.clearWebGpuDataBtn) {
+      if (!info || typeof info !== 'object') {
+        this.dom.clearWebGpuDataBtn.textContent = 'Clear Models Data';
+      } else {
+        const sizeLabel = this.formatStorageSize(info.usageBytes);
+        this.dom.clearWebGpuDataBtn.textContent = sizeLabel
+          ? `Clear Models Data (${sizeLabel})`
+          : 'Clear Models Data';
+      }
     }
-    const usageGb = Number.isFinite(info.usageBytes) ? (Number(info.usageBytes) / 1e9) : null;
-    this.dom.clearWebGpuDataBtn.textContent = usageGb !== null
-      ? `Clear Models Data (${usageGb.toFixed(2)} GB)`
-      : 'Clear Models Data';
+
+    if (this.dom.clearAudioDataBtn) {
+      const sizeLabel = info && typeof info === 'object'
+        ? this.formatStorageSize(info.audioUsageBytes)
+        : null;
+      this.dom.clearAudioDataBtn.textContent = sizeLabel
+        ? `Clear Audios Data (${sizeLabel})`
+        : 'Clear Audios Data';
+    }
+  }
+
+  formatStorageSize(bytes) {
+    if (!Number.isFinite(bytes) || bytes < 0) return null;
+    const mb = Number(bytes) / 1e6;
+    if (mb > 999) {
+      return `${(mb / 1000).toFixed(2)} GB`;
+    }
+    return `${mb.toFixed(0)} MB`;
   }
 
   setFileProgress(currentSec, totalSec, active = false, modeLabel = 'Processing File', customText = '') {

@@ -65,12 +65,13 @@ export class App {
   extractAudioDurationSec(stats: any): number | null;
   updatePipelineStatus(): void;
   cleanLapName(rawName: string): string;
-  resetTranscriptStorage(): void;
+  resetTranscriptStorage(): Promise<void>;
   copyLastLapToClipboard(): Promise<void>;
   copySubjectToClipboard(lapId?: string | null): Promise<void>;
   exportTranscriptAsTxt(): void;
   handleModelLoadState(data: any): void;
   clearWebGpuData(): Promise<void>;
+  clearAudioData(): Promise<void>;
   clearBrowserModelCaches(): Promise<void>;
   refreshBrowserStorageInfo(): Promise<void>;
   copyTranscriptLineToClipboard(text: string): Promise<void>;

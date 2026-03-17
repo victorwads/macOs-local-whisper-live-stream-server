@@ -1,6 +1,6 @@
 import type { TranscriptItem } from "./types";
 
-export type UIEvent = "start" | "processFile" | "lap" | "stop" | "clearStorage" | "clearWebGpuData" | "exportTxt" | "copyLastLap" | "copySubject" | "copyLine" | "configChange";
+export type UIEvent = "start" | "processFile" | "lap" | "stop" | "clearStorage" | "clearWebGpuData" | "clearAudioData" | "exportTxt" | "copyLastLap" | "copySubject" | "copyLine" | "configChange";
 
 export interface ConfigChangePayload {
   key: string;
@@ -14,6 +14,7 @@ export interface UIListeners {
   stop: Array<(data?: undefined) => void>;
   clearStorage: Array<(data?: undefined) => void>;
   clearWebGpuData: Array<(data?: undefined) => void>;
+  clearAudioData: Array<(data?: undefined) => void>;
   exportTxt: Array<(data?: undefined) => void>;
   copyLastLap: Array<(data?: undefined) => void>;
   copySubject: Array<(data: { lapId: string }) => void>;
@@ -62,7 +63,7 @@ export class UIManager {
   updateModelSelect(payload: UIModelPayload): void;
   setPartial(text: string): void;
   setPipelineStatus(text: string): void;
-  setWebGpuStorageInfo(info: { usageBytes?: number; quotaBytes?: number; modelEstimateBytes?: number } | null): void;
+  setWebGpuStorageInfo(info: { usageBytes?: number; quotaBytes?: number; modelEstimateBytes?: number; audioUsageBytes?: number } | null): void;
   setFileProgress(currentSec: number, totalSec: number, active?: boolean, modeLabel?: string, customText?: string): void;
   setTranscriptItems(items: TranscriptItem[]): void;
   addTranscriptItem(item: TranscriptItem): void;

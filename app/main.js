@@ -10,6 +10,7 @@ import {
   appendTranscriptItem,
   clearTranscriptAudioStorage,
   clearTranscriptStorage,
+  getTranscriptAudioStorageInfo,
   loadTranscriptAudio,
   loadTranscriptItems,
   saveTranscriptAudio,
@@ -56,6 +57,8 @@ export class App {
     this.fileNextPartialAtAudioMs = 0;
     this.fileTranscriptOffsetSec = null;
     this.fileCheckpointLastSavedSec = -1;
+    this.fileVadFrameMs = 0;
+    this.fileVadChunkDurationMs = 0;
     this.pendingSegmentMetaQueue = [];
     this.modelLoadUiActive = false;
     this.silenceStartedAtMs = 0;
@@ -63,6 +66,11 @@ export class App {
     this.pendingSilenceCommitTimer = null;
     this.backendConnected = false;
     this.currentTranscriptAudioUrl = '';
+    this.storageInfo = {
+      usageBytes: null,
+      quotaBytes: null,
+      audioUsageBytes: null,
+    };
 
     this.init();
   }
@@ -95,6 +103,7 @@ export class App {
     this.ui.subscribe('stop', () => this.stopStreaming());
     this.ui.subscribe('clearStorage', () => this.resetTranscriptStorage());
     this.ui.subscribe('clearWebGpuData', () => this.clearWebGpuData());
+    this.ui.subscribe('clearAudioData', () => this.clearAudioData());
     this.ui.subscribe('exportTxt', () => this.exportTranscriptAsTxt());
     this.ui.subscribe('copyLastLap', () => this.copyLastLapToClipboard());
     this.ui.subscribe('copySubject', ({ lapId }) => this.copySubjectToClipboard(lapId));
@@ -265,7 +274,12 @@ export class App {
         this.ui.updateModelSelect(data);
       }
       if (data.type === 'webgpu_storage_info') {
-        this.ui.setWebGpuStorageInfo(data);
+        this.storageInfo = {
+          ...this.storageInfo,
+          usageBytes: Number.isFinite(data?.usageBytes) ? Number(data.usageBytes) : this.storageInfo.usageBytes,
+          quotaBytes: Number.isFinite(data?.quotaBytes) ? Number(data.quotaBytes) : this.storageInfo.quotaBytes,
+        };
+        this.ui.setWebGpuStorageInfo(this.storageInfo);
       }
       if (data.type === 'model_load_state') {
         this.handleModelLoadState(data);
@@ -510,10 +524,10 @@ export class App {
     return maxEndSec;
   }
 
-  resetTranscriptStorage() {
+  async resetTranscriptStorage() {
     clearTranscriptStorage();
     this.clearFileCheckpoint();
-    clearTranscriptAudioStorage();
+    await clearTranscriptAudioStorage();
     this.transcriptItems = [];
     this.lastFinalText = '';
     this.lapCount = 0;
@@ -526,6 +540,7 @@ export class App {
     this.ui.setPipelineStatus('');
     this.resetTranscriptAudioPlayer();
     this.ui.addLog('Transcript storage cleared.');
+    await this.refreshBrowserStorageInfo();
   }
 
   async playTranscriptAudio(audioId) {
@@ -689,6 +704,17 @@ export class App {
     }
   }
 
+  async clearAudioData() {
+    try {
+      await clearTranscriptAudioStorage();
+      this.resetTranscriptAudioPlayer();
+      await this.refreshBrowserStorageInfo();
+      this.ui.addLog('Cleared transcript audio data.');
+    } catch (err) {
+      this.ui.addLog(`Failed to clear audios data: ${err?.message || err}`);
+    }
+  }
+
   async clearBrowserModelCaches() {
     try {
       localStorage.removeItem('whisper:webgpu:installed:v1');
@@ -737,7 +763,17 @@ export class App {
     } catch (_err) {
       // ignore
     }
-    this.ui.setWebGpuStorageInfo({ usageBytes, quotaBytes });
+    let audioUsageBytes = null;
+    try {
+      const audioInfo = await getTranscriptAudioStorageInfo();
+      if (Number.isFinite(audioInfo?.usageBytes)) {
+        audioUsageBytes = Number(audioInfo.usageBytes);
+      }
+    } catch (_err) {
+      // ignore
+    }
+    this.storageInfo = { usageBytes, quotaBytes, audioUsageBytes };
+    this.ui.setWebGpuStorageInfo(this.storageInfo);
   }
 
   async copyTranscriptLineToClipboard(text) {

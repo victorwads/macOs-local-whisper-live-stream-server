@@ -91,6 +91,25 @@ export async function clearTranscriptAudioStorage() {
   }
 }
 
+export async function getTranscriptAudioStorageInfo() {
+  try {
+    const db = await openAudioDb();
+    const records = await withStore(db, 'readonly', (store) => store.getAll());
+    const list = Array.isArray(records) ? records : [];
+    const usageBytes = list.reduce((acc, record) => {
+      const size = record?.blob instanceof Blob ? record.blob.size : 0;
+      return acc + (Number.isFinite(size) ? size : 0);
+    }, 0);
+    return {
+      usageBytes,
+      count: list.length,
+    };
+  } catch (err) {
+    console.warn('Failed to read transcript audio storage info:', err);
+    return { usageBytes: null, count: null };
+  }
+}
+
 function isValidTranscriptItem(value) {
   if (!value || typeof value !== 'object') return false;
   const item = value;
