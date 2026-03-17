@@ -43,6 +43,9 @@ export class UIManager {
       log: document.getElementById('log'),
       partialTranscript: document.getElementById('partialTranscript'),
       pipelineStatus: document.getElementById('pipelineStatus'),
+      fileProgress: document.getElementById('fileProgress'),
+      fileProgressFill: document.getElementById('fileProgressFill'),
+      fileProgressTime: document.getElementById('fileProgressTime'),
     };
 
     this.listeners = {
@@ -405,6 +408,26 @@ export class UIManager {
   setPipelineStatus(text) {
     if (!this.dom.pipelineStatus) return;
     this.dom.pipelineStatus.textContent = text || '';
+  }
+
+  setFileProgress(currentSec, totalSec, active = false) {
+    const wrapper = this.dom.fileProgress;
+    const fill = this.dom.fileProgressFill;
+    const label = this.dom.fileProgressTime;
+    if (!wrapper || !fill || !label) return;
+
+    if (!active || !Number.isFinite(totalSec) || totalSec <= 0) {
+      wrapper.classList.add('hidden');
+      fill.style.width = '0%';
+      label.textContent = '00:00.0 / 00:00.0';
+      return;
+    }
+
+    const current = Math.max(0, Math.min(Number(currentSec) || 0, totalSec));
+    const pct = Math.max(0, Math.min(100, (current / totalSec) * 100));
+    wrapper.classList.remove('hidden');
+    fill.style.width = `${pct.toFixed(2)}%`;
+    label.textContent = `${this.formatRelativeTime(current)} / ${this.formatRelativeTime(totalSec)}`;
   }
 
   setTranscriptItems(items) {

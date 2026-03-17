@@ -36,6 +36,7 @@ export class AudioFileProcessor {
       }
 
       const durationSec = audioData.length / this.targetSampleRate;
+      handlers.onStart?.({ durationSec });
       handlers.onLog?.(
         `Processing file ${file.name} (${durationSec.toFixed(2)}s) at ~${this.speed}x speed`
       );

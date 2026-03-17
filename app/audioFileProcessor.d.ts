@@ -1,4 +1,5 @@
 export interface AudioFileProcessorHandlers {
+  onStart?: (meta: { durationSec: number }) => void;
   onStatus?: (status: string) => void;
   onLog?: (message: string) => void;
   onChunk?: (

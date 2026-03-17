@@ -37,6 +37,7 @@ export class App {
     this.audioFileProcessor = new AudioFileProcessor({ targetSampleRate: 16000, speed: 10, chunkSize: 8192 });
     this.processingMode = 'idle'; // idle | mic | file
     this.fileCurrentAudioMs = 0;
+    this.fileTotalDurationSec = 0;
     this.fileSpeechStartedAtAudioMs = 0;
     this.fileNextPartialAtAudioMs = 0;
     this.fileTranscriptOffsetSec = null;
@@ -514,6 +515,7 @@ export class App {
     this.pendingFinalSegments = 0;
     this.pendingSegmentMetaQueue = [];
     this.fileCurrentAudioMs = 0;
+    this.fileTotalDurationSec = 0;
     this.fileSpeechStartedAtAudioMs = 0;
     this.fileNextPartialAtAudioMs = 0;
     this.fileTranscriptOffsetSec = 0;
@@ -539,6 +541,7 @@ export class App {
     }
     this.stopPartialScheduler();
     this.ui.setPartial('');
+    this.ui.setFileProgress(0, 0, false);
     this.updatePipelineStatus();
 
     const originalMinSpeak = this.audioState.minSpeak;
@@ -558,6 +561,10 @@ export class App {
       this.backend.selectModel(this.config.get('model'));
 
       const result = await this.audioFileProcessor.processFile(file, {
+        onStart: ({ durationSec }) => {
+          this.fileTotalDurationSec = durationSec;
+          this.ui.setFileProgress(0, durationSec, true);
+        },
         onStatus: (status) => this.ui.setStatus(status),
         onLog: (message) => this.ui.addLog(message),
         onChunk: (chunk, sampleRate, meta) => this.handleIncomingAudioChunk(chunk, sampleRate, meta),
@@ -581,6 +588,7 @@ export class App {
       this.segmenter.updateConfig('minSilence', originalMinSilence);
       this.streamingActive = false;
       this.processingMode = 'idle';
+      this.ui.setFileProgress(0, 0, false);
       this.stopPartialScheduler();
       this.updatePipelineStatus();
     }
@@ -589,6 +597,9 @@ export class App {
   handleIncomingAudioChunk(chunk, sampleRate, meta = null) {
     if (meta && Number.isFinite(meta.audioTimeMs)) {
       this.fileCurrentAudioMs = Number(meta.audioTimeMs);
+      if (this.processingMode === 'file') {
+        this.ui.setFileProgress(this.fileCurrentAudioMs / 1000, this.fileTotalDurationSec, true);
+      }
     }
 
     const nowMs = this.processingMode === 'file'
@@ -760,6 +771,7 @@ export class App {
     this.pendingFinalSegments = 0;
     this.pendingSegmentMetaQueue = [];
     this.fileCurrentAudioMs = 0;
+    this.fileTotalDurationSec = 0;
     this.fileSpeechStartedAtAudioMs = 0;
     this.fileNextPartialAtAudioMs = 0;
     this.stopPartialScheduler();
@@ -774,6 +786,7 @@ export class App {
     }
     this.ui.updateSilenceDuration(0, false);
     this.ui.setPipelineStatus('');
+    this.ui.setFileProgress(0, 0, false);
     this.audioCapture.stop();
     this.segmenter.stopSegment(); // Ensure any pending segment is finalized
     this.backend.disconnect();

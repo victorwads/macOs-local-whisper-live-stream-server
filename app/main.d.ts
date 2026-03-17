@@ -22,6 +22,7 @@ export class App {
   audioFileProcessor: any;
   processingMode: "idle" | "mic" | "file";
   fileCurrentAudioMs: number;
+  fileTotalDurationSec: number;
   fileSpeechStartedAtAudioMs: number;
   fileNextPartialAtAudioMs: number;
   fileTranscriptOffsetSec: number | null;

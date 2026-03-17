@@ -59,6 +59,7 @@ export class UIManager {
   updateModelSelect(payload: UIModelPayload): void;
   setPartial(text: string): void;
   setPipelineStatus(text: string): void;
+  setFileProgress(currentSec: number, totalSec: number, active?: boolean): void;
   setTranscriptItems(items: TranscriptItem[]): void;
   addTranscriptItem(item: TranscriptItem): void;
   formatItemTimestamp(item: TranscriptItem): string;
