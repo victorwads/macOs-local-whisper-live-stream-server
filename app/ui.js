@@ -8,6 +8,7 @@ export class UIManager {
       lapBtn: document.getElementById('lapBtn'),
       stopBtn: document.getElementById('stopBtn'),
       clearStorageBtn: document.getElementById('clearStorageBtn'),
+      exportTxtBtn: document.getElementById('exportTxtBtn'),
       copyLastLapBtn: document.getElementById('copyLastLapBtn'),
       transcript: document.getElementById('transcript'),
       final: document.getElementById('finalTranscript'),
@@ -55,7 +56,9 @@ export class UIManager {
       lap: [],
       stop: [],
       clearStorage: [],
+      exportTxt: [],
       copyLastLap: [],
+      copySubject: [],
       copyLine: [],
       configChange: []
     };
@@ -101,6 +104,7 @@ export class UIManager {
     this.dom.lapBtn?.addEventListener('click', () => this.emit('lap'));
     this.dom.stopBtn?.addEventListener('click', () => this.emit('stop'));
     this.dom.clearStorageBtn?.addEventListener('click', () => this.emit('clearStorage'));
+    this.dom.exportTxtBtn?.addEventListener('click', () => this.emit('exportTxt'));
     this.dom.copyLastLapBtn?.addEventListener('click', () => this.emit('copyLastLap'));
 
     const bindInput = (el, key, isFloat = true) => {
@@ -135,6 +139,12 @@ export class UIManager {
     this.dom.final?.addEventListener('click', (event) => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
+      const subjectSeparator = target.closest('.transcript-lap-separator');
+      if (subjectSeparator instanceof HTMLElement) {
+        const lapId = subjectSeparator.dataset.lapId || '';
+        if (lapId) this.emit('copySubject', { lapId });
+        return;
+      }
       const line = target.closest('.transcript-line');
       if (!line) return;
       this.selectTranscriptLine(line);
@@ -457,6 +467,8 @@ export class UIManager {
     if (item.type === 'lap') {
       const separator = document.createElement('div');
       separator.className = 'transcript-lap-separator';
+      separator.dataset.lapId = item.lapId;
+      separator.title = 'Click to copy this subject';
 
       const leftLine = document.createElement('div');
       leftLine.className = 'transcript-lap-line';

@@ -56,6 +56,12 @@ h1 {
     justify-content: space-between;
 }
 
+.card-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
 .link-btn {
     border: none;
     background: transparent;
@@ -391,6 +397,11 @@ button:hover { opacity: 0.9; }
     align-items: center;
     gap: 10px;
     margin: 12px 0 6px;
+    cursor: pointer;
+}
+
+.transcript-lap-separator:hover .transcript-lap-center {
+    text-decoration: underline;
 }
 
 .transcript-lap-line {

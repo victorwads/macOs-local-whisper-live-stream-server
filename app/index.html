@@ -17,7 +17,7 @@
         <button id="startBtn" type="button" aria-keyshortcuts="Alt+S">Start Mic <span class="shortcut-hint">Alt+S</span></button>
         <button id="processFileBtn" type="button">Process File</button>
         <input id="audioFileInput" type="file" accept=".mp3,.wav,.m4a,.aac,.ogg,audio/*" style="display:none">
-        <button id="lapBtn" type="button" aria-keyshortcuts="L Alt+L">Lap <span class="shortcut-hint">L / Alt+L</span></button>
+        <button id="lapBtn" type="button" aria-keyshortcuts="L Alt+L">New Subject <span class="shortcut-hint">L / Alt+L</span></button>
         <button id="stopBtn" type="button" aria-keyshortcuts="Alt+X">Stop <span class="shortcut-hint">Alt+X</span></button>
         <button id="clearStorageBtn" type="button">Clear Storage</button>
       </div>
@@ -73,19 +73,19 @@
               <input type="text" id="languageInput" value="auto" placeholder="auto">
             </div>
             <div class="control-group">
-              <label for="lapVoicePhraseInput" title="Final transcription phrase used to create a new Lap marker by voice command. Matching is case-insensitive.">Lap Voice Phrase</label>
-              <input type="text" id="lapVoicePhraseInput" value="novo contexto" placeholder="e.g. novo contexto">
+              <label for="lapVoicePhraseInput" title="Final transcription phrase used to create a new Subject marker by voice command. Matching is case-insensitive.">Subject Voice Phrase</label>
+              <input type="text" id="lapVoicePhraseInput" value="new subject" placeholder="e.g. new subject">
             </div>
             <div class="control-group">
-              <label for="lapVoiceMatchModeInput" title="How to match the phrase in final transcriptions: contains or starts with. Matching is case-insensitive.">Lap Voice Match</label>
+              <label for="lapVoiceMatchModeInput" title="How to match the phrase in final transcriptions: contains or starts with. Matching is case-insensitive.">Subject Voice Match</label>
               <select id="lapVoiceMatchModeInput">
                 <option value="contains">contains</option>
                 <option value="starts_with">starts with</option>
               </select>
             </div>
             <div class="control-group">
-              <label for="copyVoicePhraseInput" title="If a final transcription starts with this phrase, the app copies the last lap and does not save this command in history. Matching is case-insensitive and always starts with.">Copy Voice Phrase</label>
-              <input type="text" id="copyVoicePhraseInput" value="copiar lap" placeholder="e.g. copiar lap">
+              <label for="copyVoicePhraseInput" title="If a final transcription starts with this phrase, the app copies the last subject and does not save this command in history. Matching is case-insensitive and always starts with.">Copy Voice Phrase</label>
+              <input type="text" id="copyVoicePhraseInput" value="copy last subject" placeholder="e.g. copy last subject">
             </div>
           </div>
         </section>
@@ -156,7 +156,10 @@
     <div class="card transcript-section">
       <div class="card-header card-header-row">
         <span>Live Transcription</span>
-        <button id="copyLastLapBtn" type="button" class="link-btn" aria-keyshortcuts="Alt+C Control+C Meta+C">Copy Last Lap <span class="shortcut-hint">Alt+C</span></button>
+        <div class="card-header-actions">
+          <button id="exportTxtBtn" type="button" class="link-btn">Export TXT</button>
+          <button id="copyLastLapBtn" type="button" class="link-btn" aria-keyshortcuts="Alt+C Control+C Meta+C">Copy Last Subject <span class="shortcut-hint">Alt+C</span></button>
+        </div>
       </div>
       <div id="fileProgress" class="file-progress hidden" aria-live="polite">
         <div class="file-progress-top">
@@ -167,7 +170,7 @@
           <div id="fileProgressFill" class="file-progress-fill"></div>
         </div>
       </div>
-      <div id="transcript" class="transcript-container" tabindex="0" aria-label="Transcription area (Cmd/Ctrl+C copies last lap)">
+      <div id="transcript" class="transcript-container" tabindex="0" aria-label="Transcription area (Cmd/Ctrl+C copies last subject)">
         <div id="finalTranscript" class="transcript-final"></div>
         <div id="partialTranscript" class="transcript-partial"></div>
         <div id="pipelineStatus" class="pipeline-status"></div>

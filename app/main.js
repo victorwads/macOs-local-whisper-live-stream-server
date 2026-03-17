@@ -64,6 +64,10 @@ export class App {
     const items = loadTranscriptItems();
     this.transcriptItems = items;
     this.lapCount = items.reduce((acc, item) => acc + (item.type === 'lap' ? 1 : 0), 0);
+    const lastFinal = [...items].reverse().find((item) => item.type === 'final' && item.lapId);
+    if (lastFinal?.lapId) {
+      this.currentLapId = lastFinal.lapId;
+    }
     this.ui.setTranscriptItems(items);
   }
 
@@ -74,7 +78,9 @@ export class App {
     this.ui.subscribe('lap', () => this.addLapMarker());
     this.ui.subscribe('stop', () => this.stopStreaming());
     this.ui.subscribe('clearStorage', () => this.resetTranscriptStorage());
+    this.ui.subscribe('exportTxt', () => this.exportTranscriptAsTxt());
     this.ui.subscribe('copyLastLap', () => this.copyLastLapToClipboard());
+    this.ui.subscribe('copySubject', ({ lapId }) => this.copySubjectToClipboard(lapId));
     this.ui.subscribe('copyLine', ({ text }) => this.copyTranscriptLineToClipboard(text));
     this.ui.subscribe('configChange', ({ key, value }) => {
       const previousModel = this.config.get('model');
@@ -255,7 +261,7 @@ export class App {
         const copyVoice = this.parseCopyVoiceCommand(data.final);
         if (copyVoice.matched) {
           this.ui.addLog(`Voice Copy command detected: "${data.final}"`);
-          this.copyLastLapToClipboard();
+          this.copySubjectToClipboard();
           this.ui.setPartial('');
           this.ui.logProcessingStats('Final', data.stats);
           return;
@@ -287,7 +293,7 @@ export class App {
           });
         }
         if (lapVoice.matched) {
-          this.ui.addLog(`Voice Lap command detected: "${data.final}"`);
+          this.ui.addLog(`Voice Subject command detected: "${data.final}"`);
           this.addLapMarker(lapVoice.name);
           this.ui.setPartial('');
           this.ui.logProcessingStats('Final', data.stats);
@@ -313,7 +319,7 @@ export class App {
 
   addLapMarker(lapName = '') {
     const previousLapId = this.currentLapId;
-    const label = `Lap ${this.lapCount + 1}`;
+    const label = `Subject ${this.lapCount + 1}`;
     this.lapCount += 1;
     const lapItem = this.createTranscriptItem('lap', label, previousLapId);
     lapItem.lapName = lapName || '';
@@ -502,30 +508,61 @@ export class App {
   }
 
   async copyLastLapToClipboard() {
+    await this.copySubjectToClipboard();
+  }
+
+  async copySubjectToClipboard(lapId = null) {
     const finals = this.transcriptItems.filter((item) => item.type === 'final');
     if (!finals.length) {
       this.ui.addLog('Nothing to copy: no finalized transcription found.');
       return;
     }
 
-    const lastLapId = finals[finals.length - 1].lapId;
-    const lapLines = finals
-      .filter((item) => item.lapId === lastLapId)
+    const subjectId = lapId || finals[finals.length - 1].lapId;
+    const subjectLines = finals
+      .filter((item) => item.lapId === subjectId)
       .map((item) => item.text.trim())
       .filter(Boolean);
 
-    if (!lapLines.length) {
-      this.ui.addLog('Nothing to copy: last lap has no text.');
+    if (!subjectLines.length) {
+      this.ui.addLog('Nothing to copy: selected subject has no text.');
       return;
     }
 
-    const payload = lapLines.join('\n');
+    const payload = subjectLines.join('\n');
     const copied = await this.writeToClipboard(payload);
     if (copied) {
-      this.ui.addLog(`Copied last lap (${lapLines.length} lines) to clipboard.`);
+      this.ui.addLog(`Copied subject (${subjectLines.length} lines) to clipboard.`);
     } else {
       this.ui.addLog('Clipboard copy failed.');
     }
+  }
+
+  exportTranscriptAsTxt() {
+    const lines = this.transcriptItems
+      .filter((item) => item.type === 'final' && item.text && item.text.trim())
+      .map((item) => `${this.ui.formatItemTimestamp(item)} ${item.text.trim()}`);
+
+    if (!lines.length) {
+      this.ui.addLog('Nothing to export: no finalized transcription found.');
+      return;
+    }
+
+    const payload = `${lines.join('\n')}\n`;
+    const blob = new Blob([payload], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const now = new Date();
+    const pad = (value) => String(value).padStart(2, '0');
+    const filename = `transcript-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.txt`;
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    this.ui.addLog(`Exported TXT (${lines.length} lines).`);
   }
 
   async copyTranscriptLineToClipboard(text) {

@@ -11,9 +11,9 @@ export class ConfigManager {
       language: 'auto',
       partialIntervalMin: 300,
       partialIntervalMax: 1500,
-      lapVoicePhrase: 'novo contexto',
+      lapVoicePhrase: 'new subject',
       lapVoiceMatchMode: 'contains',
-      copyVoicePhrase: 'copiar lap',
+      copyVoicePhrase: 'copy last subject',
     };
 
     this.globalKeys = [

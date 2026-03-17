@@ -65,6 +65,8 @@ export class App {
   cleanLapName(rawName: string): string;
   resetTranscriptStorage(): void;
   copyLastLapToClipboard(): Promise<void>;
+  copySubjectToClipboard(lapId?: string | null): Promise<void>;
+  exportTranscriptAsTxt(): void;
   copyTranscriptLineToClipboard(text: string): Promise<void>;
   writeToClipboard(text: string): Promise<boolean>;
   buildBackendParams(mode?: "mic" | "file"): {

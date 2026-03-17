@@ -1,6 +1,6 @@
 import type { TranscriptItem } from "./types";
 
-export type UIEvent = "start" | "processFile" | "lap" | "stop" | "clearStorage" | "copyLastLap" | "copyLine" | "configChange";
+export type UIEvent = "start" | "processFile" | "lap" | "stop" | "clearStorage" | "exportTxt" | "copyLastLap" | "copySubject" | "copyLine" | "configChange";
 
 export interface ConfigChangePayload {
   key: string;
@@ -13,7 +13,9 @@ export interface UIListeners {
   lap: Array<(data?: undefined) => void>;
   stop: Array<(data?: undefined) => void>;
   clearStorage: Array<(data?: undefined) => void>;
+  exportTxt: Array<(data?: undefined) => void>;
   copyLastLap: Array<(data?: undefined) => void>;
+  copySubject: Array<(data: { lapId: string }) => void>;
   copyLine: Array<(data: { text: string }) => void>;
   configChange: Array<(data: ConfigChangePayload) => void>;
 }
