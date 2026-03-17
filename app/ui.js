@@ -483,10 +483,26 @@ export class UIManager {
       processing.textContent = ` ${processingLabel}`;
     }
 
+    const rate = document.createElement('span');
+    rate.className = 'transcript-meta-rate';
+    const rateLabel = this.formatTranslateRate(item.audioDurationSec, item.processingTimeMs);
+    if (rateLabel) {
+      rate.textContent = ` ${rateLabel}`;
+    }
+
+    const audio = document.createElement('span');
+    audio.className = 'transcript-meta-audio';
+    const audioLabel = this.formatAudioDurationSec(item.audioDurationSec);
+    if (audioLabel) {
+      audio.textContent = ` ${audioLabel}`;
+    }
+
     line.appendChild(timestamp);
+    if (audioLabel) line.appendChild(audio);
     line.appendChild(text);
-    if (partialsLabel) line.appendChild(partials);
     if (processingLabel) line.appendChild(processing);
+    if (rateLabel) line.appendChild(rate);
+    if (partialsLabel) line.appendChild(partials);
     this.dom.final.appendChild(line);
     this.scrollTranscriptToBottom();
   }
@@ -498,16 +514,27 @@ export class UIManager {
 
   formatProcessingTime(processingTimeMs) {
     if (!Number.isFinite(processingTimeMs) || processingTimeMs <= 0) return '';
-    if (processingTimeMs < 1000) return `(${Math.round(processingTimeMs)} ms)`;
-    return `(${(processingTimeMs / 1000).toFixed(2)} s)`;
+    if (processingTimeMs < 1000) return `${Math.round(processingTimeMs)}ms`;
+    return `${(processingTimeMs / 1000).toFixed(2)}s`;
   }
 
   formatPartialsSent(partialsSent) {
     if (!Number.isFinite(partialsSent) || partialsSent < 0) return '';
     const count = Math.round(partialsSent);
-    if (count === 0) return '0 parciais';
-    if (count === 1) return '1 parcial';
-    return `${count} parciais`;
+    return `${count}`;
+  }
+
+  formatAudioDurationSec(audioDurationSec) {
+    if (!Number.isFinite(audioDurationSec) || audioDurationSec <= 0) return '';
+    return `${Number(audioDurationSec).toFixed(2)}s`;
+  }
+
+  formatTranslateRate(audioDurationSec, processingTimeMs) {
+    if (!Number.isFinite(audioDurationSec) || audioDurationSec <= 0) return '';
+    if (!Number.isFinite(processingTimeMs) || processingTimeMs <= 0) return '';
+    const rate = Number(audioDurationSec) / (Number(processingTimeMs) / 1000);
+    if (!Number.isFinite(rate) || rate <= 0) return '';
+    return `${rate.toFixed(2)}x`;
   }
 
   addFinal(text) {

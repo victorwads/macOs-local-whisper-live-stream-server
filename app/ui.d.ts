@@ -63,6 +63,8 @@ export class UIManager {
   formatTimestamp(ts: number): string;
   formatProcessingTime(processingTimeMs: number | null | undefined): string;
   formatPartialsSent(partialsSent: number | null | undefined): string;
+  formatAudioDurationSec(audioDurationSec: number | null | undefined): string;
+  formatTranslateRate(audioDurationSec: number | null | undefined, processingTimeMs: number | null | undefined): string;
   addFinal(text: string): void;
   clearFinals(): void;
   scrollTranscriptToBottom(): void;
