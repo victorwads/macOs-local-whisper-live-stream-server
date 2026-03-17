@@ -185,24 +185,20 @@ export class UIManager {
     if (this.isTypingTarget(event.target)) return;
     if (event.metaKey || event.ctrlKey) return;
 
-    if (event.altKey && key === 's') {
+    if (event.shiftKey && key === 's') {
       event.preventDefault();
       this.emit('start');
       return;
     }
-    if (event.altKey && key === 'x') {
+    if (event.shiftKey && key === 'x') {
       event.preventDefault();
       this.emit('stop');
       return;
     }
-    if (key === 'l') {
+    if (event.shiftKey && key === 'l') {
       event.preventDefault();
       this.emit('lap');
       return;
-    }
-    if (event.altKey && key === 'c') {
-      event.preventDefault();
-      this.emit('copyLastLap');
     }
   }
 
