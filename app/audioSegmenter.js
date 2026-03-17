@@ -7,6 +7,8 @@ export class AudioSegmenter {
     this.isRecording = false;
     this.chunks = [];
     this.preRollBuffer = []; // Array of Float32Arrays
+    this.totalSamplesSeen = 0;
+    this.currentSegmentStartSample = 0;
     
     this.listeners = {
       segmentReady: [],
@@ -25,6 +27,7 @@ export class AudioSegmenter {
 
   // Called continuously with new audio data
   processChunk(chunk) {
+    this.totalSamplesSeen += chunk.length;
     // Always emit chunk for real-time streaming if we are in recording state
     // OR if we want to stream everything (but usually we stream only when voice active)
     // The requirement says "resume sending raw binary chunks".
@@ -60,11 +63,14 @@ export class AudioSegmenter {
     // Move pre-roll buffer into current chunks
     // And emit them for streaming so the backend gets the start of the word
     let preRollDuration = 0;
+    let preRollSamples = 0;
     for (const chunk of this.preRollBuffer) {
       this.chunks.push(chunk);
       this.emit('chunkReady', chunk);
       preRollDuration += (chunk.length / this.sampleRate) * 1000;
+      preRollSamples += chunk.length;
     }
+    this.currentSegmentStartSample = Math.max(0, this.totalSamplesSeen - preRollSamples);
     console.log(`[AudioSegmenter] Started segment with ${preRollDuration.toFixed(0)}ms pre-roll`);
     this.preRollBuffer = [];
   }
@@ -89,10 +95,21 @@ export class AudioSegmenter {
 
     this.emit('segmentReady', {
       audio: merged,
-      duration: (totalLength / this.sampleRate) * 1000
+      duration: (totalLength / this.sampleRate) * 1000,
+      startSec: this.currentSegmentStartSample / this.sampleRate,
+      endSec: (this.currentSegmentStartSample + totalLength) / this.sampleRate,
     });
 
     this.chunks = [];
+    this.currentSegmentStartSample = this.totalSamplesSeen;
+  }
+
+  reset() {
+    this.isRecording = false;
+    this.chunks = [];
+    this.preRollBuffer = [];
+    this.totalSamplesSeen = 0;
+    this.currentSegmentStartSample = 0;
   }
 
   subscribe(event, callback) {

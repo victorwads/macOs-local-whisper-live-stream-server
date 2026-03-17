@@ -191,6 +191,7 @@ button:hover { opacity: 0.9; }
 }
 
 #startBtn { background: var(--primary-color); color: white; }
+#processFileBtn { background: #0f766e; color: white; }
 #lapBtn { background: var(--secondary-color); color: white; }
 #stopBtn { background: var(--danger-color); color: white; }
 #clearStorageBtn { background: #9a3412; color: white; }

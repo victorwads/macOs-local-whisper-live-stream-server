@@ -52,8 +52,9 @@ export class AudioStateManager {
   noiseFloor: number;
   stats: AudioStateStats;
   stateEnterTime: number;
-  processAudio(samples: Float32Array, sampleRate: number): void;
+  processAudio(samples: Float32Array, sampleRate: number, nowMs?: number): void;
   updateConfig(key: string, value: number): void;
+  resetRuntimeState(startTimeMs?: number): void;
   subscribe(event: AudioStateEvent, callback: (data: any) => void): void;
   emit(event: AudioStateEvent, data: any): void;
 }

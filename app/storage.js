@@ -54,6 +54,7 @@ function normalizeTranscriptItem(value) {
       processingTimeMs: normalizeNullableNumber(item.processingTimeMs),
       audioDurationSec: normalizeNullableNumber(item.audioDurationSec),
       partialsSent: normalizeNullableNumber(item.partialsSent),
+      relativeTimeSec: normalizeNullableNumber(item.relativeTimeSec),
     };
   }
 
@@ -72,6 +73,7 @@ function normalizeTranscriptItem(value) {
     processingTimeMs: normalizeNullableNumber(item.processingTimeMs),
     audioDurationSec: normalizeNullableNumber(item.audioDurationSec),
     partialsSent: normalizeNullableNumber(item.partialsSent),
+    relativeTimeSec: normalizeNullableNumber(item.relativeTimeSec),
   };
 }
 

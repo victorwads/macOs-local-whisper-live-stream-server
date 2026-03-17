@@ -72,12 +72,12 @@ export class AudioStateManager {
    * @param {Float32Array} samples - PCM normalizado (-1..1)
    * @param {number} sampleRate - sample rate em Hz (ex.: 48000)
    */
-  processAudio(samples, sampleRate) {
+  processAudio(samples, sampleRate, nowMs = Date.now()) {
     if (!samples || samples.length === 0) {
       return;
     }
 
-    const now = Date.now();
+    const now = Number.isFinite(nowMs) ? nowMs : Date.now();
 
     // 1) Calcula RMS
     const rms = this._computeRMS(samples);
@@ -122,7 +122,7 @@ export class AudioStateManager {
         if (this.speakStartTime === null) {
           this.speakStartTime = now;
         } else if (now - this.speakStartTime >= this.minSpeak) {
-          this.transitionToSpeak();
+          this.transitionToSpeak(now);
         }
       } else {
         this.speakStartTime = null;
@@ -133,7 +133,7 @@ export class AudioStateManager {
         if (this.silenceStartTime === null) {
           this.silenceStartTime = now;
         } else if (now - this.silenceStartTime >= this.minSilence) {
-          this.transitionToSilence();
+          this.transitionToSilence(now);
         }
       } else {
         this.silenceStartTime = null;
@@ -218,8 +218,8 @@ export class AudioStateManager {
     this.emit('statsUpdate', { ...stats });
   }
 
-  transitionToSpeak() {
-    const now = Date.now();
+  transitionToSpeak(nowMs = Date.now()) {
+    const now = Number.isFinite(nowMs) ? nowMs : Date.now();
     const silenceDuration = now - this.stateEnterTime;
     
     this.isSilent = false;
@@ -232,8 +232,8 @@ export class AudioStateManager {
     this.emit('change', { isSilent: false, silenceDuration });
   }
 
-  transitionToSilence() {
-    const now = Date.now();
+  transitionToSilence(nowMs = Date.now()) {
+    const now = Number.isFinite(nowMs) ? nowMs : Date.now();
     // Calculate how long the silence condition was met before triggering
     const triggerDuration = this.silenceStartTime ? (now - this.silenceStartTime) : 0;
     
@@ -387,6 +387,17 @@ export class AudioStateManager {
     if (Object.prototype.hasOwnProperty.call(this, key)) {
       this[key] = value;
     }
+  }
+
+  resetRuntimeState(startTimeMs = Date.now()) {
+    const start = Number.isFinite(startTimeMs) ? startTimeMs : Date.now();
+    this.isSilent = true;
+    this.silenceStartTime = null;
+    this.speakStartTime = null;
+    this.noiseFloor = 0.01;
+    this.smoothedSpeechScore = null;
+    this.stateEnterTime = start;
+    this.createInitialStateStatistics();
   }
 
   subscribe(event, callback) {

@@ -3,6 +3,8 @@ export class UIManager {
     this.config = configManager;
     this.dom = {
       startBtn: document.getElementById('startBtn'),
+      processFileBtn: document.getElementById('processFileBtn'),
+      audioFileInput: document.getElementById('audioFileInput'),
       lapBtn: document.getElementById('lapBtn'),
       stopBtn: document.getElementById('stopBtn'),
       clearStorageBtn: document.getElementById('clearStorageBtn'),
@@ -45,6 +47,7 @@ export class UIManager {
 
     this.listeners = {
       start: [],
+      processFile: [],
       lap: [],
       stop: [],
       clearStorage: [],
@@ -83,6 +86,14 @@ export class UIManager {
 
   bindEvents() {
     this.dom.startBtn?.addEventListener('click', () => this.emit('start'));
+    this.dom.processFileBtn?.addEventListener('click', () => this.dom.audioFileInput?.click());
+    this.dom.audioFileInput?.addEventListener('change', () => {
+      const files = this.dom.audioFileInput?.files;
+      if (!files || !files.length) return;
+      this.emit('processFile', { file: files[0] });
+      // allow choosing the same file again
+      this.dom.audioFileInput.value = '';
+    });
     this.dom.lapBtn?.addEventListener('click', () => this.emit('lap'));
     this.dom.stopBtn?.addEventListener('click', () => this.emit('stop'));
     this.dom.clearStorageBtn?.addEventListener('click', () => this.emit('clearStorage'));
@@ -418,7 +429,7 @@ export class UIManager {
       const center = document.createElement('div');
       center.className = 'transcript-lap-center';
       const lapLabel = item.lapName ? `${item.text} — ${item.lapName}` : item.text;
-      center.textContent = `${this.formatTimestamp(item.createdAt)} • ${lapLabel}`;
+      center.textContent = `${this.formatItemTimestamp(item)} • ${lapLabel}`;
 
       separator.appendChild(leftLine);
       separator.appendChild(center);
@@ -447,7 +458,7 @@ export class UIManager {
 
       const center = document.createElement('div');
       center.className = 'transcript-model-center';
-      center.textContent = `${this.formatTimestamp(item.createdAt)} • ${item.text}`;
+      center.textContent = `${this.formatItemTimestamp(item)} • ${item.text}`;
 
       separator.appendChild(leftLine);
       separator.appendChild(center);
@@ -463,7 +474,7 @@ export class UIManager {
 
     const timestamp = document.createElement('span');
     timestamp.className = 'transcript-ts';
-    timestamp.textContent = this.formatTimestamp(item.createdAt);
+    timestamp.textContent = this.formatItemTimestamp(item);
 
     const text = document.createElement('span');
     text.className = 'transcript-text';
@@ -515,9 +526,30 @@ export class UIManager {
     this.scrollTranscriptToBottom();
   }
 
+  formatItemTimestamp(item) {
+    if (Number.isFinite(item?.relativeTimeSec) && item.relativeTimeSec >= 0) {
+      return this.formatRelativeTime(item.relativeTimeSec);
+    }
+    return this.formatTimestamp(item?.createdAt);
+  }
+
   formatTimestamp(ts) {
     const dt = new Date(ts);
     return dt.toLocaleTimeString();
+  }
+
+  formatRelativeTime(seconds) {
+    if (!Number.isFinite(seconds) || seconds < 0) return '00:00.0';
+    const totalTenths = Math.floor(seconds * 10);
+    const tenths = totalTenths % 10;
+    const totalSecs = Math.floor(totalTenths / 10);
+    const secs = totalSecs % 60;
+    const mins = Math.floor((totalSecs / 60) % 60);
+    const hours = Math.floor(totalSecs / 3600);
+    if (hours > 0) {
+      return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${tenths}`;
+    }
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${tenths}`;
   }
 
   formatProcessingTime(processingTimeMs) {

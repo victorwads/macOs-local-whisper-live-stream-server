@@ -19,6 +19,13 @@ export class App {
   partialIntervalCurrentMs: number;
   partialsSinceLastFinal: number;
   pendingFinalSegments: number;
+  audioFileProcessor: any;
+  processingMode: "idle" | "mic" | "file";
+  fileCurrentAudioMs: number;
+  fileSpeechStartedAtAudioMs: number;
+  fileNextPartialAtAudioMs: number;
+  fileTranscriptOffsetSec: number | null;
+  pendingSegmentMetaQueue: Array<{ startSec: number | null; endSec: number | null; durationSec: number }>;
   silenceStartedAtMs: number;
   silenceUiTicker: number | null;
   pendingSilenceCommitTimer: number | null;
@@ -31,7 +38,12 @@ export class App {
     type: "final" | "lap" | "model_change",
     text: string,
     lapId?: string,
-    meta?: { processingTimeMs?: number | null; audioDurationSec?: number | null; partialsSent?: number | null }
+    meta?: {
+      processingTimeMs?: number | null;
+      audioDurationSec?: number | null;
+      partialsSent?: number | null;
+      relativeTimeSec?: number | null;
+    }
   ): TranscriptItem;
   pushTranscriptItem(item: TranscriptItem): void;
   generateLapId(): string;
@@ -45,7 +57,7 @@ export class App {
   copyLastLapToClipboard(): Promise<void>;
   copyTranscriptLineToClipboard(text: string): Promise<void>;
   writeToClipboard(text: string): Promise<boolean>;
-  buildBackendParams(): {
+  buildBackendParams(mode?: "mic" | "file"): {
     window: number;
     interval: number;
     min_seconds: number;
@@ -57,7 +69,13 @@ export class App {
   restartPartialScheduler(): void;
   scheduleNextPartialTick(delayMs: number): void;
   handlePartialTick(): void;
-  computeAdaptivePartialIntervalMs(): number;
+  computeAdaptivePartialIntervalMs(elapsedOverrideMs?: number | null): number;
+  maybeTriggerFilePartial(nowAudioMs: number): void;
+  handleIncomingAudioChunk(
+    chunk: Float32Array,
+    sampleRate: number,
+    meta?: { audioTimeMs?: number; chunkDurationMs?: number } | null
+  ): void;
   startStreaming(): Promise<void>;
   stopStreaming(): void;
 }

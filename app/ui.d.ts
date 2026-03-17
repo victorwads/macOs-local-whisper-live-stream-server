@@ -1,6 +1,6 @@
 import type { TranscriptItem } from "./types";
 
-export type UIEvent = "start" | "lap" | "stop" | "clearStorage" | "copyLastLap" | "copyLine" | "configChange";
+export type UIEvent = "start" | "processFile" | "lap" | "stop" | "clearStorage" | "copyLastLap" | "copyLine" | "configChange";
 
 export interface ConfigChangePayload {
   key: string;
@@ -9,6 +9,7 @@ export interface ConfigChangePayload {
 
 export interface UIListeners {
   start: Array<(data?: undefined) => void>;
+  processFile: Array<(data: { file: File }) => void>;
   lap: Array<(data?: undefined) => void>;
   stop: Array<(data?: undefined) => void>;
   clearStorage: Array<(data?: undefined) => void>;
@@ -60,7 +61,9 @@ export class UIManager {
   setPipelineStatus(text: string): void;
   setTranscriptItems(items: TranscriptItem[]): void;
   addTranscriptItem(item: TranscriptItem): void;
+  formatItemTimestamp(item: TranscriptItem): string;
   formatTimestamp(ts: number): string;
+  formatRelativeTime(seconds: number): string;
   formatProcessingTime(processingTimeMs: number | null | undefined): string;
   formatPartialsSent(partialsSent: number | null | undefined): string;
   formatAudioDurationSec(audioDurationSec: number | null | undefined): string;

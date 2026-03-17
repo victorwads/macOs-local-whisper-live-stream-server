@@ -11,4 +11,5 @@ export interface TranscriptItem {
   processingTimeMs?: number | null;
   audioDurationSec?: number | null;
   partialsSent?: number | null;
+  relativeTimeSec?: number | null;
 }

@@ -3,6 +3,7 @@ import { UIManager } from './ui.js';
 import { AudioCapture } from './audioCapture.js';
 import { AudioStateManager } from './audioState.js';
 import { AudioSegmenter } from './audioSegmenter.js';
+import { AudioFileProcessor } from './audioFileProcessor.js';
 import { createBackendClient } from './backendClient.js';
 import { encodeWAV } from './utils.js';
 import { appendTranscriptItem, clearTranscriptStorage, loadTranscriptItems } from './storage.js';
@@ -33,6 +34,13 @@ export class App {
     this.partialIntervalCurrentMs = 0;
     this.partialsSinceLastFinal = 0;
     this.pendingFinalSegments = 0;
+    this.audioFileProcessor = new AudioFileProcessor({ targetSampleRate: 16000, speed: 10, chunkSize: 8192 });
+    this.processingMode = 'idle'; // idle | mic | file
+    this.fileCurrentAudioMs = 0;
+    this.fileSpeechStartedAtAudioMs = 0;
+    this.fileNextPartialAtAudioMs = 0;
+    this.fileTranscriptOffsetSec = null;
+    this.pendingSegmentMetaQueue = [];
     this.silenceStartedAtMs = 0;
     this.silenceUiTicker = null;
     this.pendingSilenceCommitTimer = null;
@@ -58,6 +66,7 @@ export class App {
   setupEvents() {
     // UI Events
     this.ui.subscribe('start', () => this.startStreaming());
+    this.ui.subscribe('processFile', ({ file }) => this.processUploadedFile(file));
     this.ui.subscribe('lap', () => this.addLapMarker());
     this.ui.subscribe('stop', () => this.stopStreaming());
     this.ui.subscribe('clearStorage', () => this.resetTranscriptStorage());
@@ -105,7 +114,8 @@ export class App {
         
         // Send params to backend if needed
         if (['window', 'interval', 'language', 'maxSeconds'].includes(key)) {
-          this.backend.setParams(this.buildBackendParams());
+          const mode = this.processingMode === 'file' ? 'file' : 'mic';
+          this.backend.setParams(this.buildBackendParams(mode));
         }
 
         if (['partialIntervalMin', 'partialIntervalMax', 'maxSeconds'].includes(key) && this.streamingActive && !this.audioState.isSilent) {
@@ -125,14 +135,18 @@ export class App {
 
     this.audioState.subscribe('change', ({ isSilent, triggerDuration, silenceDuration }) => {
       if (isSilent) {
-        this.silenceStartedAtMs = Date.now();
+        this.silenceStartedAtMs = this.processingMode === 'file'
+          ? this.fileCurrentAudioMs
+          : Date.now();
         const configuredMinSilence = Number(this.config.get('minSilence')) || 0;
-        const confirmMs = Math.max(80, Math.min(240, Math.round(configuredMinSilence * 0.35)));
+        const confirmMs = this.processingMode === 'file'
+          ? 0
+          : Math.max(80, Math.min(240, Math.round(configuredMinSilence * 0.35)));
         if (this.pendingSilenceCommitTimer !== null) {
           clearTimeout(this.pendingSilenceCommitTimer);
           this.pendingSilenceCommitTimer = null;
         }
-        this.pendingSilenceCommitTimer = setTimeout(() => {
+        const commitSilence = () => {
           this.pendingSilenceCommitTimer = null;
           if (!this.audioState.isSilent) return;
           // Speech Ended (confirmed)
@@ -143,7 +157,12 @@ export class App {
           this.ui.addLog(
             `Silence confirmed (trigger=${Math.round(triggerDuration || 0)}ms, min=${Math.round(configuredMinSilence)}ms, confirm=${confirmMs}ms), sent to server`
           );
-        }, confirmMs);
+        };
+        if (this.processingMode === 'file') {
+          commitSilence();
+        } else {
+          this.pendingSilenceCommitTimer = setTimeout(commitSilence, confirmMs);
+        }
       } else {
         if (this.pendingSilenceCommitTimer !== null) {
           clearTimeout(this.pendingSilenceCommitTimer);
@@ -152,11 +171,15 @@ export class App {
         this.silenceStartedAtMs = 0;
         // Speech Started
         this.segmenter.startSegment();
-        if (this.streamingActive) {
+        if (this.streamingActive && this.processingMode === 'mic') {
           this.startPartialScheduler();
         }
-        if (silenceDuration) {
-            this.ui.addLog(`Resuming speech after ${silenceDuration}ms of silence`);
+        if (this.streamingActive && this.processingMode === 'file') {
+          this.fileSpeechStartedAtAudioMs = this.fileCurrentAudioMs;
+          this.fileNextPartialAtAudioMs = 0;
+        }
+        if (Number.isFinite(silenceDuration) && silenceDuration > 0 && silenceDuration < 600000) {
+            this.ui.addLog(`Resuming speech after ${Math.round(silenceDuration)}ms of silence`);
         }
         this.updatePipelineStatus();
       }
@@ -167,11 +190,16 @@ export class App {
       this.backend.sendAudio(chunk);
     });
 
-    this.segmenter.subscribe('segmentReady', ({ audio, duration }) => {
+    this.segmenter.subscribe('segmentReady', ({ audio, duration, startSec, endSec }) => {
       const wavView = encodeWAV(audio, 16000);
       const blob = new Blob([wavView], { type: 'audio/wav' });
       const url = URL.createObjectURL(blob);
       this.ui.addAudioLog(url, duration);
+      this.pendingSegmentMetaQueue.push({
+        startSec: Number.isFinite(startSec) ? Number(startSec) : null,
+        endSec: Number.isFinite(endSec) ? Number(endSec) : null,
+        durationSec: duration / 1000,
+      });
       this.pendingFinalSegments += 1;
       this.updatePipelineStatus();
     });
@@ -207,6 +235,9 @@ export class App {
         this.ui.logProcessingStats('Partial', data.stats);
       }
       if (data.type === 'final' && data.final !== undefined) {
+        const segmentMeta = this.pendingSegmentMetaQueue.length
+          ? this.pendingSegmentMetaQueue.shift()
+          : null;
         if (this.pendingFinalSegments > 0) {
           this.pendingFinalSegments -= 1;
         }
@@ -226,10 +257,21 @@ export class App {
           return;
         }
         const lapVoice = this.parseLapVoiceCommand(data.final);
+        const backendDurationSec = this.extractAudioDurationSec(data.stats);
+        const audioDurationSec = Number.isFinite(backendDurationSec)
+          ? backendDurationSec
+          : (segmentMeta?.durationSec ?? null);
+        const relativeTimeSec = Number.isFinite(segmentMeta?.startSec)
+          ? segmentMeta.startSec
+          : (Number.isFinite(this.fileTranscriptOffsetSec) ? this.fileTranscriptOffsetSec : null);
+        if (Number.isFinite(relativeTimeSec) && Number.isFinite(audioDurationSec) && audioDurationSec > 0) {
+          this.fileTranscriptOffsetSec = relativeTimeSec + audioDurationSec;
+        }
         this.pushTranscriptItem(this.createTranscriptItem('final', data.final, this.currentLapId, {
           processingTimeMs: this.extractProcessingTimeMs(data.stats),
-          audioDurationSec: this.extractAudioDurationSec(data.stats),
+          audioDurationSec,
           partialsSent: partialsCountForFinal,
+          relativeTimeSec,
         }));
         if (lapVoice.matched) {
           this.ui.addLog(`Voice Lap command detected: "${data.final}"`);
@@ -282,6 +324,7 @@ export class App {
       processingTimeMs: meta.processingTimeMs ?? null,
       audioDurationSec: meta.audioDurationSec ?? null,
       partialsSent: meta.partialsSent ?? null,
+      relativeTimeSec: meta.relativeTimeSec ?? null,
     };
   }
 
@@ -354,6 +397,7 @@ export class App {
     this.lapCount = 0;
     this.currentLapId = this.generateLapId();
     this.pendingFinalSegments = 0;
+    this.pendingSegmentMetaQueue = [];
     this.ui.setTranscriptItems([]);
     this.ui.setPartial('');
     this.ui.setPipelineStatus('');
@@ -452,12 +496,134 @@ export class App {
     }
   }
 
-  buildBackendParams() {
+  async processUploadedFile(file) {
+    if (!file) return;
+
+    if (this.audioFileProcessor.isActive) {
+      this.ui.addLog('File processing is already running.');
+      return;
+    }
+
+    if (this.audioCapture.isStreaming) {
+      this.stopStreaming();
+    }
+
+    this.streamingActive = true;
+    this.processingMode = 'file';
+    this.partialsSinceLastFinal = 0;
+    this.pendingFinalSegments = 0;
+    this.pendingSegmentMetaQueue = [];
+    this.fileCurrentAudioMs = 0;
+    this.fileSpeechStartedAtAudioMs = 0;
+    this.fileNextPartialAtAudioMs = 0;
+    this.fileTranscriptOffsetSec = 0;
+
+    if (typeof this.audioState.resetRuntimeState === 'function') {
+      this.audioState.resetRuntimeState(0);
+    } else {
+      this.audioState.isSilent = true;
+      this.audioState.silenceStartTime = null;
+      this.audioState.speakStartTime = null;
+      this.audioState.stateEnterTime = 0;
+      if (typeof this.audioState.createInitialStateStatistics === 'function') {
+        this.audioState.createInitialStateStatistics();
+      }
+    }
+
+    if (typeof this.segmenter.reset === 'function') {
+      this.segmenter.reset();
+    } else {
+      this.segmenter.isRecording = false;
+      this.segmenter.currentSegment = [];
+      this.segmenter.preRollBuffer = [];
+    }
+    this.stopPartialScheduler();
+    this.ui.setPartial('');
+    this.updatePipelineStatus();
+
+    const originalMinSpeak = this.audioState.minSpeak;
+    const originalMinSilence = this.audioState.minSilence;
+    const tunedMinSpeak = Math.max(300, originalMinSpeak);
+    const tunedMinSilence = Math.max(1500, originalMinSilence);
+
+    try {
+      // File mode can use larger windows while preserving silence/speech rules in audio time.
+      this.audioState.updateConfig('minSpeak', tunedMinSpeak);
+      this.audioState.updateConfig('minSilence', tunedMinSilence);
+      this.segmenter.updateConfig('minSpeak', tunedMinSpeak);
+      this.segmenter.updateConfig('minSilence', tunedMinSilence);
+
+      await this.backend.connect();
+      this.backend.setParams(this.buildBackendParams('file'));
+      this.backend.selectModel(this.config.get('model'));
+
+      const result = await this.audioFileProcessor.processFile(file, {
+        onStatus: (status) => this.ui.setStatus(status),
+        onLog: (message) => this.ui.addLog(message),
+        onChunk: (chunk, sampleRate, meta) => this.handleIncomingAudioChunk(chunk, sampleRate, meta),
+      });
+
+      // Finalize remaining buffered speech from file stream.
+      this.segmenter.stopSegment();
+      this.stopPartialScheduler();
+
+      if (result.aborted) {
+        this.ui.addLog('File processing interrupted.');
+      } else {
+        this.ui.addLog('File feeding completed. Waiting for pending transcriptions...');
+      }
+    } catch (err) {
+      this.ui.setStatus(`File processing error: ${err.message}`);
+    } finally {
+      this.audioState.updateConfig('minSpeak', originalMinSpeak);
+      this.audioState.updateConfig('minSilence', originalMinSilence);
+      this.segmenter.updateConfig('minSpeak', originalMinSpeak);
+      this.segmenter.updateConfig('minSilence', originalMinSilence);
+      this.streamingActive = false;
+      this.processingMode = 'idle';
+      this.stopPartialScheduler();
+      this.updatePipelineStatus();
+    }
+  }
+
+  handleIncomingAudioChunk(chunk, sampleRate, meta = null) {
+    if (meta && Number.isFinite(meta.audioTimeMs)) {
+      this.fileCurrentAudioMs = Number(meta.audioTimeMs);
+    }
+
+    const nowMs = this.processingMode === 'file'
+      ? this.fileCurrentAudioMs
+      : Date.now();
+
+    this.audioState.processAudio(chunk, sampleRate, nowMs);
+
+    if (this.audioState.stats) {
+      const silenceDurationMs = this.audioState.isSilent
+        ? (this.silenceStartedAtMs ? Math.max(0, nowMs - this.silenceStartedAtMs) : 0)
+        : (this.audioState.stats.silenceCandidateMs || 0);
+      this.ui.updateIndicators(
+        this.audioState.stats.rms,
+        this.audioState.isSilent,
+        silenceDurationMs
+      );
+    }
+
+    this.segmenter.processChunk(chunk);
+    if (this.processingMode === 'file') {
+      this.maybeTriggerFilePartial(nowMs);
+    }
+  }
+
+  buildBackendParams(mode = 'mic') {
+    const maxSecondsBase = Number(this.config.get('maxSeconds')) || 10;
+    const maxSeconds = mode === 'file'
+      ? Math.max(30, maxSecondsBase)
+      : maxSecondsBase;
     return {
       window: this.config.get('window'),
       interval: this.config.get('interval'),
       min_seconds: Math.min(0.5, this.config.get('window')),
-      max_seconds: this.config.get('maxSeconds'),
+      max_seconds: maxSeconds,
       language: this.config.get('language'),
     };
   }
@@ -479,6 +645,7 @@ export class App {
     this.currentSpeechStartedAt = 0;
     this.lastPartialProcessingMs = 0;
     this.partialIntervalCurrentMs = 0;
+    this.fileNextPartialAtAudioMs = 0;
     this.ui.updatePartialIntervalCurrent(0);
   }
 
@@ -506,25 +673,51 @@ export class App {
     this.scheduleNextPartialTick(intervalMs);
   }
 
-  computeAdaptivePartialIntervalMs() {
+  computeAdaptivePartialIntervalMs(elapsedOverrideMs = null) {
     const minInterval = Math.max(50, Number(this.config.get('partialIntervalMin')) || 300);
     const maxIntervalConfigured = Math.max(minInterval, Number(this.config.get('partialIntervalMax')) || minInterval);
     const maxAudioMs = Math.max(1000, (Number(this.config.get('maxSeconds')) || 10) * 1000);
-    const elapsedMs = this.currentSpeechStartedAt ? Math.max(0, Date.now() - this.currentSpeechStartedAt) : 0;
+    const elapsedMs = Number.isFinite(elapsedOverrideMs)
+      ? Math.max(0, Number(elapsedOverrideMs))
+      : (this.currentSpeechStartedAt ? Math.max(0, Date.now() - this.currentSpeechStartedAt) : 0);
 
     const growthSpan = Math.max(1, maxAudioMs - minInterval);
     const progress = Math.min(1, Math.max(0, (elapsedMs - minInterval) / growthSpan));
     const proportional = minInterval + (maxIntervalConfigured - minInterval) * progress;
 
-    if (this.lastPartialProcessingMs > proportional) {
+    if (this.processingMode === 'mic' && this.lastPartialProcessingMs > proportional) {
       return Math.round(this.lastPartialProcessingMs);
     }
     return Math.round(proportional);
   }
 
+  maybeTriggerFilePartial(nowAudioMs) {
+    if (!this.streamingActive || this.processingMode !== 'file') return;
+    if (this.audioState.isSilent) return;
+
+    if (!this.fileSpeechStartedAtAudioMs) {
+      this.fileSpeechStartedAtAudioMs = nowAudioMs;
+    }
+
+    const elapsedMs = Math.max(0, nowAudioMs - this.fileSpeechStartedAtAudioMs);
+    const intervalMs = this.computeAdaptivePartialIntervalMs(elapsedMs);
+    this.partialIntervalCurrentMs = intervalMs;
+    this.ui.updatePartialIntervalCurrent(intervalMs);
+
+    if (!this.fileNextPartialAtAudioMs) {
+      this.fileNextPartialAtAudioMs = elapsedMs + intervalMs;
+      return;
+    }
+
+    if (elapsedMs < this.fileNextPartialAtAudioMs) return;
+    this.backend.triggerPartial(intervalMs);
+    this.fileNextPartialAtAudioMs = elapsedMs + intervalMs;
+  }
+
   async startStreaming() {
     try {
       this.streamingActive = true;
+      this.processingMode = 'mic';
       this.partialsSinceLastFinal = 0;
       this.pendingFinalSegments = 0;
       this.currentLapId = this.generateLapId();
@@ -542,28 +735,12 @@ export class App {
         this.startPartialScheduler();
       }
       await this.audioCapture.start((chunk, sampleRate) => {
-        // Alimenta o VAD com amostras brutas
-        this.audioState.processAudio(chunk, sampleRate);
-
-        // Atualiza indicadores de nível/estado usando stats correntes
-        if (this.audioState.stats) {
-          const silenceDurationMs = this.audioState.isSilent
-            ? (this.silenceStartedAtMs ? Math.max(0, Date.now() - this.silenceStartedAtMs) : 0)
-            : (this.audioState.stats.silenceCandidateMs || 0);
-          this.ui.updateIndicators(
-            this.audioState.stats.rms,
-            this.audioState.isSilent,
-            silenceDurationMs
-          );
-        }
-
-        // Sempre encaminhamos chunks para o segmentador;
-        // ele decide o que vira segmento com base no estado (start/stopSegment)
-        this.segmenter.processChunk(chunk);
+        this.handleIncomingAudioChunk(chunk, sampleRate);
       });
       this.ui.setStatus(`Streaming audio with model ${this.config.get('model')}`);
     } catch (err) {
       this.streamingActive = false;
+      this.processingMode = 'idle';
       this.stopPartialScheduler();
       this.ui.setStatus('Error starting microphone: ' + err.message);
       if (this.silenceUiTicker !== null) {
@@ -574,9 +751,17 @@ export class App {
   }
 
   stopStreaming() {
+    if (this.audioFileProcessor.isActive) {
+      this.audioFileProcessor.stop();
+    }
     this.streamingActive = false;
+    this.processingMode = 'idle';
     this.partialsSinceLastFinal = 0;
     this.pendingFinalSegments = 0;
+    this.pendingSegmentMetaQueue = [];
+    this.fileCurrentAudioMs = 0;
+    this.fileSpeechStartedAtAudioMs = 0;
+    this.fileNextPartialAtAudioMs = 0;
     this.stopPartialScheduler();
     if (this.pendingSilenceCommitTimer !== null) {
       clearTimeout(this.pendingSilenceCommitTimer);
