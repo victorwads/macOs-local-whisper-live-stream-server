@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Union
 
 from download_model import SUPPORTED, fetch_model
-from cpp_model import download_cpp_model
+from cpp_model import download_cpp_model, list_cpp_downloadable_models
 from whisper_engine import WhisperEngine
 from whisper_cpp import WhisperCppEngine
 from whisper_server_client import server_manager
@@ -12,6 +12,12 @@ from whisper_server_client import server_manager
 DEFAULT_MODEL = os.getenv("WHISPER_MODEL_SIZE", "large-v3")
 BACKEND = os.getenv("WHISPER_BACKEND", "cpp").lower()  # cpp or faster
 
+# Fallback quantized variants we want to expose even if remote model listing is unavailable.
+CPP_QUANT_SUFFIXES_FALLBACK = (
+    "q8_0",
+    "q5_0",
+    "q5_1",
+)
 
 def _make_engine(model_size: str):
     if BACKEND == "cpp":
@@ -64,8 +70,14 @@ def installed_models_info() -> Dict[str, Dict[str, float]]:
     cpp_dir = models_root / "cpp"
     if cpp_dir.exists():
         for item in cpp_dir.iterdir():
-            if item.is_file() and item.suffix == ".bin":
-                model_name = item.name.replace("ggml-", "").replace(".bin", "")
+            if item.is_file() and item.suffix in {".bin", ".gguf"}:
+                model_name = item.name
+                if model_name.startswith("ggml-"):
+                    model_name = model_name[len("ggml-") :]
+                if model_name.endswith(".bin"):
+                    model_name = model_name[: -len(".bin")]
+                elif model_name.endswith(".gguf"):
+                    model_name = model_name[: -len(".gguf")]
                 _upsert_model_info(info, model_name, item.stat().st_size)
             elif item.is_dir():
                 _upsert_model_info(info, item.name, _dir_size_bytes(item))
@@ -95,12 +107,29 @@ def _dir_size_bytes(path: Path) -> int:
 
 
 def supported_models() -> List[str]:
-    return list(SUPPORTED)
+    supported = set(SUPPORTED)
+
+    # For whisper.cpp backend, expose quantized options without relying solely on network calls.
+    if BACKEND == "cpp":
+        remote_models = list_cpp_downloadable_models()
+        if remote_models:
+            supported.update(remote_models)
+        else:
+            # Offline fallback: still expose common quantized variants for each base model.
+            for base in SUPPORTED:
+                for suffix in CPP_QUANT_SUFFIXES_FALLBACK:
+                    supported.add(f"{base}-{suffix}")
+
+    # Always include locally installed models (e.g., manually downloaded quantized files).
+    supported.update(installed_models())
+
+    return sorted(supported)
 
 
 def available_models() -> List[str]:
     installed = set(installed_models())
-    ordered = [m for m in SUPPORTED if m in installed]
+    ordered_supported = supported_models()
+    ordered = [m for m in ordered_supported if m in installed]
     if ordered:
         return ordered
     return list(installed)

@@ -25,10 +25,18 @@ export class App {
   hydrateTranscript(): void;
   setupEvents(): void;
   addLapMarker(lapName?: string): void;
-  createTranscriptItem(type: "final" | "lap", text: string, lapId?: string): TranscriptItem;
+  createTranscriptItem(
+    type: "final" | "lap",
+    text: string,
+    lapId?: string,
+    meta?: { processingTimeMs?: number | null; audioDurationSec?: number | null }
+  ): TranscriptItem;
   pushTranscriptItem(item: TranscriptItem): void;
   generateLapId(): string;
   parseLapVoiceCommand(finalText: string): { matched: boolean; name: string };
+  parseCopyVoiceCommand(finalText: string): { matched: boolean };
+  extractProcessingTimeMs(stats: any): number | null;
+  extractAudioDurationSec(stats: any): number | null;
   cleanLapName(rawName: string): string;
   resetTranscriptStorage(): void;
   copyLastLapToClipboard(): Promise<void>;

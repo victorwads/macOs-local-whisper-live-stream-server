@@ -8,4 +8,6 @@ export interface TranscriptItem {
   lapName?: string;
   createdAt: number;
   lastMessage?: string;
+  processingTimeMs?: number | null;
+  audioDurationSec?: number | null;
 }

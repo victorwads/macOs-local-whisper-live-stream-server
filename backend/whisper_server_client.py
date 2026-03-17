@@ -158,13 +158,22 @@ class WhisperServerManager:
         return Path("")
 
     def _resolve_model(self, model_name: str) -> Path:
-        name = model_name
-        if not name.startswith("ggml-"):
-            name = f"ggml-{name}.bin"
-        path = self.models_dir / "cpp" / name
-        if not path.exists():
-            raise FileNotFoundError(f"Model not found for server: {path}")
-        return path
+        normalized = model_name
+        if normalized.startswith("ggml-"):
+            normalized = normalized[len("ggml-") :]
+        if normalized.endswith(".bin"):
+            normalized = normalized[: -len(".bin")]
+        elif normalized.endswith(".gguf"):
+            normalized = normalized[: -len(".gguf")]
+
+        candidates = [
+            self.models_dir / "cpp" / f"ggml-{normalized}.bin",
+            self.models_dir / "cpp" / f"ggml-{normalized}.gguf",
+        ]
+        for path in candidates:
+            if path.exists():
+                return path
+        raise FileNotFoundError(f"Model not found for server: {candidates[0]}")
 
     def _get_or_start(self, model_name: str) -> WhisperServerProcess:
         with self.manager_lock:

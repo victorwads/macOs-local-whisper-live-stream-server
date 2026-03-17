@@ -195,8 +195,19 @@ export class App {
           this.partialIntervalCurrentMs = data.stats.partial_interval_ms;
         }
         this.ui.updatePartialIntervalCurrent(this.partialIntervalCurrentMs);
+        const copyVoice = this.parseCopyVoiceCommand(data.final);
+        if (copyVoice.matched) {
+          this.ui.addLog(`Voice Copy command detected: "${data.final}"`);
+          this.copyLastLapToClipboard();
+          this.ui.setPartial('');
+          this.ui.logProcessingStats('Final', data.stats);
+          return;
+        }
         const lapVoice = this.parseLapVoiceCommand(data.final);
-        this.pushTranscriptItem(this.createTranscriptItem('final', data.final));
+        this.pushTranscriptItem(this.createTranscriptItem('final', data.final, this.currentLapId, {
+          processingTimeMs: this.extractProcessingTimeMs(data.stats),
+          audioDurationSec: this.extractAudioDurationSec(data.stats),
+        }));
         if (lapVoice.matched) {
           this.ui.addLog(`Voice Lap command detected: "${data.final}"`);
           this.addLapMarker(lapVoice.name);
@@ -235,7 +246,7 @@ export class App {
     this.backend.sendSilence();
   }
 
-  createTranscriptItem(type, text, lapId = this.currentLapId) {
+  createTranscriptItem(type, text, lapId = this.currentLapId, meta = {}) {
     const id = typeof crypto !== 'undefined' && crypto.randomUUID
       ? crypto.randomUUID()
       : `item-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -245,7 +256,22 @@ export class App {
       text,
       createdAt: Date.now(),
       lapId,
+      processingTimeMs: meta.processingTimeMs ?? null,
+      audioDurationSec: meta.audioDurationSec ?? null,
     };
+  }
+
+  extractProcessingTimeMs(stats) {
+    if (!stats || typeof stats !== 'object') return null;
+    if (Number.isFinite(stats.processing_time_ms)) return Number(stats.processing_time_ms);
+    if (Number.isFinite(stats.processing_time)) return Math.round(Number(stats.processing_time) * 1000);
+    return null;
+  }
+
+  extractAudioDurationSec(stats) {
+    if (!stats || typeof stats !== 'object') return null;
+    if (!Number.isFinite(stats.audio_duration)) return null;
+    return Number(stats.audio_duration);
   }
 
   pushTranscriptItem(item) {
@@ -281,6 +307,15 @@ export class App {
     if (idx < 0) return { matched: false, name: '' };
     const rawName = original.slice(idx + phrase.length).trim();
     return { matched: true, name: this.cleanLapName(rawName) };
+  }
+
+  parseCopyVoiceCommand(finalText) {
+    if (!finalText || typeof finalText !== 'string') return { matched: false };
+    const phrase = (this.config.get('copyVoicePhrase') || '').toString().trim().toLowerCase();
+    if (!phrase) return { matched: false };
+    const normalized = finalText.trim().toLowerCase();
+    if (!normalized.startsWith(phrase)) return { matched: false };
+    return { matched: true };
   }
 
   cleanLapName(rawName) {

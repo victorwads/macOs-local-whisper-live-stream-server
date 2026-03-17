@@ -60,6 +60,7 @@ export class UIManager {
   setTranscriptItems(items: TranscriptItem[]): void;
   addTranscriptItem(item: TranscriptItem): void;
   formatTimestamp(ts: number): string;
+  formatProcessingTime(processingTimeMs: number | null | undefined): string;
   addFinal(text: string): void;
   clearFinals(): void;
   scrollTranscriptToBottom(): void;

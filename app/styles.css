@@ -221,6 +221,14 @@ button:hover { opacity: 0.9; }
     color: #222;
 }
 
+.transcript-processing-meta {
+    color: #7c3aed;
+    font-size: 0.74rem;
+    font-family: 'Consolas', 'Monaco', monospace;
+    opacity: 0.9;
+    white-space: nowrap;
+}
+
 .transcript-line-lap .transcript-text {
     width: 100%;
     color: #2563eb;

@@ -17,6 +17,7 @@ export class UIManager {
       languageInput: document.getElementById('languageInput'),
       lapVoicePhraseInput: document.getElementById('lapVoicePhraseInput'),
       lapVoiceMatchModeInput: document.getElementById('lapVoiceMatchModeInput'),
+      copyVoicePhraseInput: document.getElementById('copyVoicePhraseInput'),
       loadedLang: document.getElementById('loadedLang'),
       partialIntervalMinInput: document.getElementById('partialIntervalMinInput'),
       partialIntervalMaxInput: document.getElementById('partialIntervalMaxInput'),
@@ -70,6 +71,7 @@ export class UIManager {
     if (this.dom.languageInput) this.dom.languageInput.value = this.config.get('language');
     if (this.dom.lapVoicePhraseInput) this.dom.lapVoicePhraseInput.value = this.config.get('lapVoicePhrase');
     if (this.dom.lapVoiceMatchModeInput) this.dom.lapVoiceMatchModeInput.value = this.config.get('lapVoiceMatchMode');
+    if (this.dom.copyVoicePhraseInput) this.dom.copyVoicePhraseInput.value = this.config.get('copyVoicePhrase');
     if (this.dom.partialIntervalMinInput) this.dom.partialIntervalMinInput.value = this.config.get('partialIntervalMin');
     if (this.dom.partialIntervalMaxInput) this.dom.partialIntervalMaxInput.value = this.config.get('partialIntervalMax');
     // Also update model select if needed, though usually it triggers the change
@@ -104,6 +106,7 @@ export class UIManager {
     bindInput(this.dom.partialIntervalMaxInput, 'partialIntervalMax');
     bindInput(this.dom.languageInput, 'language', false);
     bindInput(this.dom.lapVoicePhraseInput, 'lapVoicePhrase', false);
+    bindInput(this.dom.copyVoicePhraseInput, 'copyVoicePhrase', false);
 
     this.dom.lapVoiceMatchModeInput?.addEventListener('change', () => {
       this.emit('configChange', { key: 'lapVoiceMatchMode', value: this.dom.lapVoiceMatchModeInput.value });
@@ -334,7 +337,7 @@ export class UIManager {
   }
 
   updateModelSelect({ supported, installed, current, def, installed_info }) {
-    const baseModels = supported.length ? supported : Array.from(new Set(installed || []));
+    const baseModels = Array.from(new Set([...(supported || []), ...(installed || [])]));
     const installedSet = new Set(installed || []);
     const installedInfo = installed_info || {};
     const installedModels = baseModels
@@ -438,8 +441,16 @@ export class UIManager {
     text.className = 'transcript-text';
     text.textContent = item.text;
 
+    const processing = document.createElement('span');
+    processing.className = 'transcript-processing-meta';
+    const processingLabel = this.formatProcessingTime(item.processingTimeMs);
+    if (processingLabel) {
+      processing.textContent = ` ${processingLabel}`;
+    }
+
     line.appendChild(timestamp);
     line.appendChild(text);
+    if (processingLabel) line.appendChild(processing);
     this.dom.final.appendChild(line);
     this.scrollTranscriptToBottom();
   }
@@ -447,6 +458,12 @@ export class UIManager {
   formatTimestamp(ts) {
     const dt = new Date(ts);
     return dt.toLocaleTimeString();
+  }
+
+  formatProcessingTime(processingTimeMs) {
+    if (!Number.isFinite(processingTimeMs) || processingTimeMs <= 0) return '';
+    if (processingTimeMs < 1000) return `(${Math.round(processingTimeMs)} ms)`;
+    return `(${(processingTimeMs / 1000).toFixed(2)} s)`;
   }
 
   addFinal(text) {

@@ -11,6 +11,7 @@ export interface AppConfigState {
   partialIntervalMax: number;
   lapVoicePhrase: string;
   lapVoiceMatchMode: "contains" | "starts_with";
+  copyVoicePhrase: string;
 }
 
 export class ConfigManager {
@@ -27,4 +28,3 @@ export class ConfigManager {
   subscribe(callback: (event: string, data: { key: string; value: string | number }) => void): void;
   emit(event: string, data: { key: string; value: string | number }): void;
 }
-

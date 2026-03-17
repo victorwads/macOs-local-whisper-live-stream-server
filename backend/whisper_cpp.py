@@ -55,8 +55,10 @@ class WhisperCppEngine:
     def _resolve_model_path(self) -> Path:
         names_to_try = []
         names_to_try.append(f"ggml-{self.model_name}.bin")
+        names_to_try.append(f"ggml-{self.model_name}.gguf")
         names_to_try.append(self.model_name)
         names_to_try.append(f"{self.model_name}.bin")
+        names_to_try.append(f"{self.model_name}.gguf")
         for name in names_to_try:
             candidate = self.models_dir / name
             if candidate.exists():

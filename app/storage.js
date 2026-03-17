@@ -47,7 +47,14 @@ function isValidTranscriptItem(value) {
 function normalizeTranscriptItem(value) {
   if (!value || typeof value !== 'object') return null;
 
-  if (isValidTranscriptItem(value)) return value;
+  if (isValidTranscriptItem(value)) {
+    const item = value;
+    return {
+      ...item,
+      processingTimeMs: normalizeNullableNumber(item.processingTimeMs),
+      audioDurationSec: normalizeNullableNumber(item.audioDurationSec),
+    };
+  }
 
   const item = value;
   const hasCoreFields =
@@ -61,5 +68,13 @@ function normalizeTranscriptItem(value) {
   return {
     ...item,
     lapId: typeof item.lapId === 'string' ? item.lapId : `legacy-${item.id}`,
+    processingTimeMs: normalizeNullableNumber(item.processingTimeMs),
+    audioDurationSec: normalizeNullableNumber(item.audioDurationSec),
   };
+}
+
+function normalizeNullableNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
 }
