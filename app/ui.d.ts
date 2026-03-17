@@ -65,6 +65,7 @@ export class UIManager {
   formatPartialsSent(partialsSent: number | null | undefined): string;
   formatAudioDurationSec(audioDurationSec: number | null | undefined): string;
   formatTranslateRate(audioDurationSec: number | null | undefined, processingTimeMs: number | null | undefined): string;
+  formatAvgTimePerWord(audioDurationSec: number | null | undefined, text: string): string;
   addFinal(text: string): void;
   clearFinals(): void;
   scrollTranscriptToBottom(): void;

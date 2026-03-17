@@ -309,6 +309,14 @@ button:hover { opacity: 0.9; }
     white-space: nowrap;
 }
 
+.transcript-meta-wordtime {
+    color: #475569;
+    font-size: 0.74rem;
+    font-family: 'Consolas', 'Monaco', monospace;
+    opacity: 0.9;
+    white-space: nowrap;
+}
+
 .transcript-line-lap .transcript-text {
     width: 100%;
     color: #2563eb;
@@ -426,6 +434,10 @@ button:hover { opacity: 0.9; }
 
 .legend-dot-rate {
     background: #2563eb;
+}
+
+.legend-dot-wordtime {
+    background: #475569;
 }
 
 @keyframes transcript-spin {

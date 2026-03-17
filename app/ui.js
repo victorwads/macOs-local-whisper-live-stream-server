@@ -490,6 +490,13 @@ export class UIManager {
       rate.textContent = ` ${rateLabel}`;
     }
 
+    const avgWord = document.createElement('span');
+    avgWord.className = 'transcript-meta-wordtime';
+    const avgWordLabel = this.formatAvgTimePerWord(item.audioDurationSec, item.text);
+    if (avgWordLabel) {
+      avgWord.textContent = ` ${avgWordLabel}`;
+    }
+
     const audio = document.createElement('span');
     audio.className = 'transcript-meta-audio';
     const audioLabel = this.formatAudioDurationSec(item.audioDurationSec);
@@ -502,6 +509,7 @@ export class UIManager {
     line.appendChild(text);
     if (processingLabel) line.appendChild(processing);
     if (rateLabel) line.appendChild(rate);
+    if (avgWordLabel) line.appendChild(avgWord);
     if (partialsLabel) line.appendChild(partials);
     this.dom.final.appendChild(line);
     this.scrollTranscriptToBottom();
@@ -535,6 +543,16 @@ export class UIManager {
     const rate = Number(audioDurationSec) / (Number(processingTimeMs) / 1000);
     if (!Number.isFinite(rate) || rate <= 0) return '';
     return `${rate.toFixed(2)}x`;
+  }
+
+  formatAvgTimePerWord(audioDurationSec, text) {
+    if (!Number.isFinite(audioDurationSec) || audioDurationSec <= 0) return '';
+    if (!text || typeof text !== 'string') return '';
+    const words = text.trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return '';
+    const avgMs = (Number(audioDurationSec) * 1000) / words.length;
+    if (!Number.isFinite(avgMs) || avgMs <= 0) return '';
+    return `${Math.round(avgMs)}ms`;
   }
 
   addFinal(text) {
