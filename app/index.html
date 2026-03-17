@@ -20,56 +20,73 @@
         <button id="clearStorageBtn" type="button">Clear Storage</button>
       </div>
 
-      <div class="controls-grid">
-        <div class="control-group">
-          <label for="modelSelect" title="Select the Whisper model size. Larger models are more accurate but slower.">Model</label>
-          <select id="modelSelect"></select>
-        </div>
-        <div class="control-group">
-          <label for="thresholdInput" title="Minimum audio level required to detect speech. If background noise is triggering capture when you are not speaking, increase this value.">Silence Threshold</label>
-          <input id="thresholdInput" type="number" step="0.0001" min="0" value="0.0015">
-        </div>
-        <div class="control-group">
-          <label for="minSilenceInput" title="Minimum silence duration required to finalize (split) the current audio segment. Higher values keep more context and can improve punctuation/language detection, but increase latency and segment size.">Min Silence (ms)</label>
-          <input id="minSilenceInput" type="number" step="100" min="0" value="1000">
-        </div>
-        <div class="control-group">
-          <label for="minSpeakInput" title="Minimum speech duration required before attempting transcription. Helps capture short utterances (like 'oh' or 'hi') without reacting to ultra-short noise.">Min Speak (ms)</label>
-          <input id="minSpeakInput" type="number" step="50" min="0" value="200">
-        </div>
-        <div class="control-group">
-          <label for="maxSecondsInput" title="Maximum segment duration before forcing transcription. Higher values keep more context (and cost more). Lower values reduce cost, but increase the risk of splitting context mid-sentence.">Max Audio (s)</label>
-          <input id="maxSecondsInput" type="number" step="0.5" min="1" value="10">
-        </div>
-        <div class="control-group">
-          <label for="languageInput" title="Language code for transcription (e.g., 'en', 'pt', 'auto'). Full names like 'portuguese' are also supported.">
-            Language <span id="loadedLang" style="margin-left: 8px; font-size: 0.9em; color: #666;"></span>
-          </label>
-          <input type="text" id="languageInput" value="auto" placeholder="auto">
-        </div>
-        <div class="control-group">
-          <label for="partialIntervalMinInput" title="Initial interval between partial transcriptions. Lower values feel more real-time, but increase GPU/CPU usage.">Partial Interval Min (ms)</label>
-          <input type="number" id="partialIntervalMinInput" step="100" min="0" value="300">
-        </div>
-        <div class="control-group">
-          <label for="partialIntervalMaxInput" title="Maximum interval for partials as the segment grows (adaptive mode). It is often close to Max Audio in milliseconds, but you can tune it for your latency/cost target.">Partial Interval Max (ms)</label>
-          <input type="number" id="partialIntervalMaxInput" step="100" min="0" value="1500">
-        </div>
-        <div class="control-group">
-          <label for="lapVoicePhraseInput" title="Final transcription phrase used to create a new Lap marker by voice command. Matching is case-insensitive.">Lap Voice Phrase</label>
-          <input type="text" id="lapVoicePhraseInput" value="novo contexto" placeholder="e.g. novo contexto">
-        </div>
-        <div class="control-group">
-          <label for="lapVoiceMatchModeInput" title="How to match the phrase in final transcriptions: contains or starts with. Matching is case-insensitive.">Lap Voice Match</label>
-          <select id="lapVoiceMatchModeInput">
-            <option value="contains">contains</option>
-            <option value="starts_with">starts with</option>
-          </select>
-        </div>
-        <div class="control-group">
-          <label for="copyVoicePhraseInput" title="If a final transcription starts with this phrase, the app copies the last lap and does not save this command in history. Matching is case-insensitive and always starts with.">Copy Voice Phrase</label>
-          <input type="text" id="copyVoicePhraseInput" value="copiar lap" placeholder="e.g. copiar lap">
-        </div>
+      <div class="control-sections">
+        <section class="config-box config-family">
+          <div class="config-box-header">
+            <span class="scope-chip scope-family">Família</span>
+            <h2 class="config-box-title">Configurações do Modelo</h2>
+          </div>
+          <div class="controls-grid">
+            <div class="control-group">
+              <label for="modelSelect" title="Select the Whisper model size. Larger models are more accurate but slower.">Model</label>
+              <select id="modelSelect"></select>
+            </div>
+            <div class="control-group">
+              <label for="thresholdInput" title="Minimum audio level required to detect speech. If background noise is triggering capture when you are not speaking, increase this value.">Silence Threshold</label>
+              <input id="thresholdInput" type="number" step="0.0001" min="0" value="0.0015">
+            </div>
+            <div class="control-group">
+              <label for="minSilenceInput" title="Minimum silence duration required to finalize (split) the current audio segment. Higher values keep more context and can improve punctuation/language detection, but increase latency and segment size.">Min Silence (ms)</label>
+              <input id="minSilenceInput" type="number" step="100" min="0" value="1000">
+            </div>
+            <div class="control-group">
+              <label for="minSpeakInput" title="Minimum speech duration required before attempting transcription. Helps capture short utterances (like 'oh' or 'hi') without reacting to ultra-short noise.">Min Speak (ms)</label>
+              <input id="minSpeakInput" type="number" step="50" min="0" value="200">
+            </div>
+            <div class="control-group">
+              <label for="maxSecondsInput" title="Maximum segment duration before forcing transcription. Higher values keep more context (and cost more). Lower values reduce cost, but increase the risk of splitting context mid-sentence.">Max Audio (s)</label>
+              <input id="maxSecondsInput" type="number" step="0.5" min="1" value="10">
+            </div>
+            <div class="control-group">
+              <label for="partialIntervalMinInput" title="Initial interval between partial transcriptions. Lower values feel more real-time, but increase GPU/CPU usage.">Partial Interval Min (ms)</label>
+              <input type="number" id="partialIntervalMinInput" step="100" min="0" value="300">
+            </div>
+            <div class="control-group">
+              <label for="partialIntervalMaxInput" title="Maximum interval for partials as the segment grows (adaptive mode). It is often close to Max Audio in milliseconds, but you can tune it for your latency/cost target.">Partial Interval Max (ms)</label>
+              <input type="number" id="partialIntervalMaxInput" step="100" min="0" value="1500">
+            </div>
+          </div>
+        </section>
+
+        <section class="config-box config-global">
+          <div class="config-box-header">
+            <span class="scope-chip scope-global">Global</span>
+            <h2 class="config-box-title">Configurações Globais</h2>
+          </div>
+          <div class="controls-grid">
+            <div class="control-group">
+              <label for="languageInput" title="Language code for transcription (e.g., 'en', 'pt', 'auto'). Full names like 'portuguese' are also supported.">
+                Language <span id="loadedLang" style="margin-left: 8px; font-size: 0.9em; color: #666;"></span>
+              </label>
+              <input type="text" id="languageInput" value="auto" placeholder="auto">
+            </div>
+            <div class="control-group">
+              <label for="lapVoicePhraseInput" title="Final transcription phrase used to create a new Lap marker by voice command. Matching is case-insensitive.">Lap Voice Phrase</label>
+              <input type="text" id="lapVoicePhraseInput" value="novo contexto" placeholder="e.g. novo contexto">
+            </div>
+            <div class="control-group">
+              <label for="lapVoiceMatchModeInput" title="How to match the phrase in final transcriptions: contains or starts with. Matching is case-insensitive.">Lap Voice Match</label>
+              <select id="lapVoiceMatchModeInput">
+                <option value="contains">contains</option>
+                <option value="starts_with">starts with</option>
+              </select>
+            </div>
+            <div class="control-group">
+              <label for="copyVoicePhraseInput" title="If a final transcription starts with this phrase, the app copies the last lap and does not save this command in history. Matching is case-insensitive and always starts with.">Copy Voice Phrase</label>
+              <input type="text" id="copyVoicePhraseInput" value="copiar lap" placeholder="e.g. copiar lap">
+            </div>
+          </div>
+        </section>
       </div>
 
       <div class="indicators">

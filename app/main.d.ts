@@ -27,7 +27,7 @@ export class App {
   setupEvents(): void;
   addLapMarker(lapName?: string): void;
   createTranscriptItem(
-    type: "final" | "lap",
+    type: "final" | "lap" | "model_change",
     text: string,
     lapId?: string,
     meta?: { processingTimeMs?: number | null; audioDurationSec?: number | null; partialsSent?: number | null }

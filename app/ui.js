@@ -430,6 +430,28 @@ export class UIManager {
       return;
     }
 
+    if (item.type === 'model_change') {
+      const separator = document.createElement('div');
+      separator.className = 'transcript-model-separator';
+
+      const leftLine = document.createElement('div');
+      leftLine.className = 'transcript-model-line';
+      const rightLine = document.createElement('div');
+      rightLine.className = 'transcript-model-line';
+
+      const center = document.createElement('div');
+      center.className = 'transcript-model-center';
+      center.textContent = `${this.formatTimestamp(item.createdAt)} • ${item.text}`;
+
+      separator.appendChild(leftLine);
+      separator.appendChild(center);
+      separator.appendChild(rightLine);
+      this.dom.final.appendChild(separator);
+
+      this.scrollTranscriptToBottom();
+      return;
+    }
+
     const line = document.createElement('div');
     line.className = 'transcript-line';
 

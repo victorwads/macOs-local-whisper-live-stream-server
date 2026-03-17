@@ -1,4 +1,4 @@
-export type TranscriptItemType = "final" | "lap";
+export type TranscriptItemType = "final" | "lap" | "model_change";
 
 export interface TranscriptItem {
   id: string;

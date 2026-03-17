@@ -63,6 +63,7 @@ export class App {
     this.ui.subscribe('copyLastLap', () => this.copyLastLapToClipboard());
     this.ui.subscribe('copyLine', ({ text }) => this.copyTranscriptLineToClipboard(text));
     this.ui.subscribe('configChange', ({ key, value }) => {
+      const previousModel = this.config.get('model');
       this.config.set(key, value);
       
       if (key === 'model') {
@@ -87,6 +88,11 @@ export class App {
         // 3. Send select_model
         this.backend.selectModel(value);
         this.partialsSinceLastFinal = 0;
+
+        if (previousModel && value && previousModel !== value) {
+          const message = `Mudou do modelo ${previousModel} para ${value}`;
+          this.pushTranscriptItem(this.createTranscriptItem('model_change', message));
+        }
         
         // 4. Update UI inputs (because they might have old values)
         this.ui.updateInputs(); 
