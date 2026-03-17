@@ -70,6 +70,8 @@ export class App {
   exportTranscriptAsTxt(): void;
   handleModelLoadState(data: any): void;
   clearWebGpuData(): Promise<void>;
+  clearBrowserModelCaches(): Promise<void>;
+  refreshBrowserStorageInfo(): Promise<void>;
   copyTranscriptLineToClipboard(text: string): Promise<void>;
   writeToClipboard(text: string): Promise<boolean>;
   buildBackendParams(mode?: "mic" | "file"): {

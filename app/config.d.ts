@@ -1,6 +1,6 @@
 export interface AppConfigState {
   model: string;
-  backendMode: "python" | "webgpu";
+  backendMode: "python" | "webgpu" | "whispercpp_wasm";
   threshold: number;
   window: number;
   interval: number;

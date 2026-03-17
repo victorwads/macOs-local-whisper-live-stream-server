@@ -21,4 +21,4 @@ export interface BackendClient {
   clearCachedData?(): Promise<void>;
 }
 
-export function createBackendClient(mode?: "ws" | "webgpu"): BackendClient;
+export function createBackendClient(mode?: "ws" | "webgpu" | "whispercpp_wasm"): BackendClient;

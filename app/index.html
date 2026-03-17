@@ -89,17 +89,15 @@
               <label>Storage</label>
               <div class="field-button-row">
                 <button id="clearStorageBtn" type="button" class="field-button">Clear Transcriptions History</button>
-                <button id="clearWebGpuDataBtn" type="button" class="field-button">Clear WebGPU Data</button>
+                <button id="clearWebGpuDataBtn" type="button" class="field-button">Clear Models Data</button>
               </div>
             </div>
             <div class="control-group">
-              <div id="webgpuStorageInfo" class="storage-info">WebGPU storage: --</div>
-            </div>
-            <div class="control-group">
-              <label for="backendModeInput" title="Select transcription backend implementation. Python uses local server; WebGPU runs directly in browser using GPU.">Backend Implementation</label>
+              <label for="backendModeInput" title="Select transcription backend implementation. Python uses local server. WebGPU runs in-browser on GPU. whisper.cpp WASM runs in-browser with WebAssembly.">Backend Implementation</label>
               <select id="backendModeInput">
-                <option value="python">Python backend</option>
-                <option value="webgpu">WebGPU (browser)</option>
+                <option value="python">Python Backend</option>
+                <option value="webgpu">Browser WebGPU (beta)</option>
+                <option value="whispercpp_wasm">Browser WebASM whisper.cpp (beta)</option>
               </select>
             </div>
           </div>

@@ -228,13 +228,6 @@ input, select {
     gap: 8px;
 }
 
-.storage-info {
-    margin-top: 6px;
-    font-size: 0.82rem;
-    color: #475569;
-    font-family: 'Consolas', 'Monaco', monospace;
-}
-
 /* Buttons */
 .button-group {
     display: flex;

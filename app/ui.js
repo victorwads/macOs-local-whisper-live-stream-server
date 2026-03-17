@@ -9,7 +9,6 @@ export class UIManager {
       stopBtn: document.getElementById('stopBtn'),
       clearStorageBtn: document.getElementById('clearStorageBtn'),
       clearWebGpuDataBtn: document.getElementById('clearWebGpuDataBtn'),
-      webgpuStorageInfo: document.getElementById('webgpuStorageInfo'),
       exportTxtBtn: document.getElementById('exportTxtBtn'),
       copyLastLapBtn: document.getElementById('copyLastLapBtn'),
       transcript: document.getElementById('transcript'),
@@ -286,7 +285,14 @@ export class UIManager {
 
   logProcessingStats(type, stats) {
     if (!stats) return;
-    const msg = `[${type}] Processed ${stats.audio_duration.toFixed(2)}s audio in ${stats.processing_time.toFixed(2)}s`;
+    const audioSec = Number.isFinite(stats.audio_duration)
+      ? Number(stats.audio_duration)
+      : null;
+    const processingSec = Number.isFinite(stats.processing_time)
+      ? Number(stats.processing_time)
+      : (Number.isFinite(stats.processing_time_ms) ? Number(stats.processing_time_ms) / 1000 : null);
+    if (!Number.isFinite(audioSec) || !Number.isFinite(processingSec)) return;
+    const msg = `[${type}] Processed ${audioSec.toFixed(2)}s audio in ${processingSec.toFixed(2)}s`;
     this.addLog(msg);
   }
 
@@ -398,11 +404,17 @@ export class UIManager {
         const opt = document.createElement('option');
         opt.value = m;
         const isInstalled = installed.includes(m);
+        const lower = String(m).toLowerCase();
+        const looksWhisperModel = /tiny|base|small|medium|large/.test(lower);
+        const familyLabel = looksWhisperModel
+          ? (lower.includes('.en') ? 'EN-only' : 'Multilingual')
+          : '';
         const sizeGb = installedInfo?.[m]?.size_gb;
         const sizeLabel = isInstalled && Number.isFinite(sizeGb)
           ? ` - ${sizeGb < 1 ? sizeGb.toFixed(2) : sizeGb.toFixed(1)} GB`
           : '';
-        opt.textContent = `${m}${isInstalled ? ` (installed${sizeLabel})` : ''}`;
+        const suffix = `${isInstalled ? ` (installed${sizeLabel})` : ''}${familyLabel ? ` [${familyLabel}]` : ''}`;
+        opt.textContent = `${m}${suffix}`;
         if (m === current) opt.selected = true;
         this.dom.modelSelect.appendChild(opt);
       });
@@ -428,21 +440,15 @@ export class UIManager {
   }
 
   setWebGpuStorageInfo(info) {
-    if (!this.dom.webgpuStorageInfo) return;
+    if (!this.dom.clearWebGpuDataBtn) return;
     if (!info || typeof info !== 'object') {
-      this.dom.webgpuStorageInfo.textContent = 'WebGPU storage: --';
+      this.dom.clearWebGpuDataBtn.textContent = 'Clear Models Data';
       return;
     }
     const usageGb = Number.isFinite(info.usageBytes) ? (Number(info.usageBytes) / 1e9) : null;
-    const quotaGb = Number.isFinite(info.quotaBytes) ? (Number(info.quotaBytes) / 1e9) : null;
-    const modelGb = Number.isFinite(info.modelEstimateBytes) ? (Number(info.modelEstimateBytes) / 1e9) : null;
-    const browserPart = usageGb !== null
-      ? `browser ${usageGb.toFixed(2)} GB${quotaGb !== null ? ` / ${quotaGb.toFixed(2)} GB` : ''}`
-      : 'browser --';
-    const modelPart = modelGb !== null
-      ? `models ~${modelGb.toFixed(2)} GB`
-      : 'models --';
-    this.dom.webgpuStorageInfo.textContent = `WebGPU storage: ${browserPart} | ${modelPart}`;
+    this.dom.clearWebGpuDataBtn.textContent = usageGb !== null
+      ? `Clear Models Data (${usageGb.toFixed(2)} GB)`
+      : 'Clear Models Data';
   }
 
   setFileProgress(currentSec, totalSec, active = false, modeLabel = 'Processing File', customText = '') {

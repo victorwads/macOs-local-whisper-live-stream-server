@@ -41,6 +41,17 @@ function normalizeWhisperLanguage(value) {
   return raw;
 }
 
+function browserLanguageHint() {
+  try {
+    const lang = typeof navigator?.language === 'string' ? navigator.language : '';
+    const normalized = normalizeWhisperLanguage(lang.split('-')[0]);
+    if (normalized === 'en') return null;
+    return normalized;
+  } catch (_err) {
+    return null;
+  }
+}
+
 function shortFileName(value) {
   if (!value) return 'model file';
   const text = String(value);
@@ -243,6 +254,7 @@ export class WebGPUBackendClient {
     };
     this.emit('message', {
       type: 'model_load_state',
+      backend: 'webgpu',
       stage: 'start',
       label: `Loading model ${targetPreset.label}`,
       phase: 'init',
@@ -254,6 +266,7 @@ export class WebGPUBackendClient {
     env.allowLocalModels = false;
     this.emit('message', {
       type: 'model_load_state',
+      backend: 'webgpu',
       stage: 'resolve',
       label: `Loading model ${targetPreset.label}`,
       phase: 'resolve',
@@ -287,6 +300,7 @@ export class WebGPUBackendClient {
         }
         this.emit('message', {
           type: 'model_load_state',
+          backend: 'webgpu',
           stage: 'resolve',
           label,
           phase,
@@ -324,6 +338,7 @@ export class WebGPUBackendClient {
           : `Step 3/4 - Loading cached files (${doneCount}/${totalCount})`;
         this.emit('message', {
           type: 'model_load_state',
+          backend: 'webgpu',
           stage: 'progress',
           label,
           phase,
@@ -341,6 +356,7 @@ export class WebGPUBackendClient {
         const isDownloading = !!this.currentModelLoad.sawDownload;
         this.emit('message', {
           type: 'model_load_state',
+          backend: 'webgpu',
           stage: 'progress',
           label: isDownloading
             ? `Downloading model ${targetPreset.label}`
@@ -378,6 +394,7 @@ export class WebGPUBackendClient {
     if (primaryDtype !== requestedDtype) {
       this.emit('message', {
         type: 'model_load_state',
+        backend: 'webgpu',
         stage: 'resolve',
         label: `Loading model ${targetPreset.label}`,
         phase: 'compat',
@@ -409,6 +426,7 @@ export class WebGPUBackendClient {
       if (!shouldRetryWithoutMerged && !canRetryWithFallbackDtype) throw err;
       this.emit('message', {
         type: 'model_load_state',
+        backend: 'webgpu',
         stage: 'resolve',
         label: `Loading model ${targetPreset.label}`,
         phase: 'fallback',
@@ -436,6 +454,7 @@ export class WebGPUBackendClient {
     if (this.currentPreset.key === targetKey) {
       this.emit('message', {
         type: 'model_load_state',
+        backend: 'webgpu',
         stage: 'resolve',
         label: `Loading model ${targetPreset.label}`,
         phase: 'finalize',
@@ -455,6 +474,7 @@ export class WebGPUBackendClient {
       });
       this.emit('message', {
         type: 'model_load_state',
+        backend: 'webgpu',
         stage: 'done',
         label: `Model ready ${targetPreset.label}`,
         elapsedMs,
@@ -472,6 +492,7 @@ export class WebGPUBackendClient {
       this.emit('message', { type: 'debug', status: `WebGPU preload failed: ${message}` });
       this.emit('message', {
         type: 'model_load_state',
+        backend: 'webgpu',
         stage: 'error',
         label: 'Model load failed',
         detail: message,
@@ -556,7 +577,10 @@ export class WebGPUBackendClient {
       const startedAt = performance.now();
       this.emit('message', { status: 'transcribing segment' });
 
-      const language = normalizeWhisperLanguage(this.params.language);
+      const requestedLanguage = normalizeWhisperLanguage(this.params.language);
+      const englishOnlyModel = /\.en($|[-.])/.test(String(this.currentPreset?.modelId || '').toLowerCase());
+      const language = requestedLanguage
+        || (englishOnlyModel ? 'en' : (browserLanguageHint() || 'pt'));
       const generateKwargs = {
         task: 'transcribe',
       };

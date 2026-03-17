@@ -22,7 +22,10 @@ export class App {
       minSpeak: this.config.get('minSpeak'),
       minSilence: this.config.get('minSilence')
     });
-    const backendMode = this.config.get('backendMode') === 'webgpu' ? 'webgpu' : 'ws';
+    const backendModeConfig = this.config.get('backendMode');
+    const backendMode = backendModeConfig === 'webgpu'
+      ? 'webgpu'
+      : (backendModeConfig === 'whispercpp_wasm' ? 'whispercpp_wasm' : 'ws');
     this.backend = createBackendClient(backendMode);
     this.transcriptItems = [];
     this.lapCount = 0;
@@ -57,6 +60,7 @@ export class App {
   init() {
     this.setupEvents();
     this.hydrateTranscript();
+    this.refreshBrowserStorageInfo();
     this.backend.connect().catch(err => {
       this.ui.setStatus('Failed to connect to backend: ' + err.message);
     });
@@ -235,8 +239,8 @@ export class App {
       this.backend.requestModels();
     });
 
-    this.backend.subscribe('close', () => this.ui.setStatus('WebSocket closed'));
-    this.backend.subscribe('error', () => this.ui.setStatus('WebSocket error'));
+    this.backend.subscribe('close', () => this.ui.setStatus('Backend connection closed'));
+    this.backend.subscribe('error', () => this.ui.setStatus('Backend error'));
     
     this.backend.subscribe('message', (data) => {
       if (data.type === 'models') {
@@ -588,6 +592,9 @@ export class App {
     if (!data || typeof data !== 'object') return;
     if (this.processingMode === 'file') return;
     const stage = data.stage || '';
+    const backendLabel = data.backend === 'whispercpp_wasm'
+      ? 'whisper.cpp WASM'
+      : (data.backend === 'webgpu' ? 'WebGPU' : 'Browser');
     if (stage === 'start' || stage === 'resolve') {
       this.modelLoadUiActive = true;
       this.ui.setFileProgress(0, 0, true, data.label || 'Loading model', data.detail || 'Preparing...');
@@ -604,9 +611,9 @@ export class App {
       const elapsedMs = Number(data.elapsedMs) || 0;
       const elapsedSec = elapsedMs > 0 ? (elapsedMs / 1000).toFixed(2) : null;
       if (data.fromCacheLikely) {
-        this.ui.addLog(`WebGPU model ready from cache${elapsedSec ? ` in ${elapsedSec}s` : ''}.`);
+        this.ui.addLog(`${backendLabel} model ready from cache${elapsedSec ? ` in ${elapsedSec}s` : ''}.`);
       } else {
-        this.ui.addLog(`WebGPU model ready${elapsedSec ? ` in ${elapsedSec}s` : ''}.`);
+        this.ui.addLog(`${backendLabel} model ready${elapsedSec ? ` in ${elapsedSec}s` : ''}.`);
       }
       this.modelLoadUiActive = false;
       this.ui.setFileProgress(0, 0, false);
@@ -620,19 +627,70 @@ export class App {
   }
 
   async clearWebGpuData() {
-    const clearFn = this.backend && typeof this.backend.clearCachedData === 'function'
-      ? this.backend.clearCachedData.bind(this.backend)
-      : null;
-    if (!clearFn) {
-      this.ui.addLog('Clear WebGPU data is only available when using WebGPU backend.');
-      return;
-    }
     try {
-      await clearFn();
-      this.ui.addLog('Cleared WebGPU data.');
+      const clearFn = this.backend && typeof this.backend.clearCachedData === 'function'
+        ? this.backend.clearCachedData.bind(this.backend)
+        : null;
+      if (clearFn) {
+        await clearFn();
+      }
+      await this.clearBrowserModelCaches();
+      await this.refreshBrowserStorageInfo();
+      this.ui.addLog('Cleared browser model data.');
     } catch (err) {
-      this.ui.addLog(`Failed to clear WebGPU data: ${err?.message || err}`);
+      this.ui.addLog(`Failed to clear model data: ${err?.message || err}`);
     }
+  }
+
+  async clearBrowserModelCaches() {
+    try {
+      localStorage.removeItem('whisper:webgpu:installed:v1');
+    } catch (_err) {
+      // ignore
+    }
+
+    if (window.caches?.keys) {
+      try {
+        const keys = await window.caches.keys();
+        await Promise.all(keys
+          .filter((key) => /transformers|huggingface|onnx|xenova|whisper|timur/i.test(key))
+          .map((key) => window.caches.delete(key)));
+      } catch (_err) {
+        // ignore
+      }
+    }
+
+    if (indexedDB?.databases) {
+      try {
+        const dbs = await indexedDB.databases();
+        await Promise.all((dbs || [])
+          .map((db) => db?.name)
+          .filter((name) => typeof name === 'string' && /transformers|huggingface|onnx|xenova|whisper|timur/i.test(name))
+          .map((name) => new Promise((resolve) => {
+            const req = indexedDB.deleteDatabase(name);
+            req.onsuccess = () => resolve();
+            req.onerror = () => resolve();
+            req.onblocked = () => resolve();
+          })));
+      } catch (_err) {
+        // ignore
+      }
+    }
+  }
+
+  async refreshBrowserStorageInfo() {
+    let usageBytes = null;
+    let quotaBytes = null;
+    try {
+      if (navigator.storage?.estimate) {
+        const estimate = await navigator.storage.estimate();
+        usageBytes = Number.isFinite(estimate?.usage) ? Number(estimate.usage) : null;
+        quotaBytes = Number.isFinite(estimate?.quota) ? Number(estimate.quota) : null;
+      }
+    } catch (_err) {
+      // ignore
+    }
+    this.ui.setWebGpuStorageInfo({ usageBytes, quotaBytes });
   }
 
   async copyTranscriptLineToClipboard(text) {
@@ -763,9 +821,10 @@ export class App {
         onChunk: (chunk, sampleRate, meta) => this.handleIncomingAudioChunk(chunk, sampleRate, meta),
       }, { startAtSec: resumeAtSec });
 
-      // Finalize remaining buffered speech from file stream.
-      this.segmenter.stopSegment();
-      this.stopPartialScheduler();
+	      // Finalize remaining buffered speech from file stream.
+	      this.segmenter.stopSegment();
+	      this.backend.sendSilence();
+	      this.stopPartialScheduler();
 
       if (result.aborted) {
         this.ui.addLog('File processing interrupted.');
@@ -836,6 +895,18 @@ export class App {
     }
 
     this.segmenter.processChunk(chunk);
+    // File mode safeguard: if silence detection misses long stretches,
+    // force a segment cut using maxSeconds to avoid huge 1-shot transcriptions.
+    if (this.processingMode === 'file' && this.streamingActive && !this.audioState.isSilent && this.segmenter.isRecording) {
+      const maxAudioMs = Math.max(1000, (Number(this.config.get('maxSeconds')) || 10) * 1000);
+      if (nowMs - this.fileSpeechStartedAtAudioMs >= maxAudioMs) {
+        this.segmenter.stopSegment();
+        this.backend.sendSilence();
+        this.segmenter.startSegment();
+        this.fileSpeechStartedAtAudioMs = nowMs;
+        this.ui.addLog(`Forced file segment cut at ${Math.round(maxAudioMs)}ms (maxSeconds).`);
+      }
+    }
     if (this.processingMode === 'file') {
       this.maybeTriggerFilePartial(nowMs);
     }
