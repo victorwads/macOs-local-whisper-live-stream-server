@@ -30,6 +30,7 @@ export class App {
   fileTranscriptOffsetSec: number | null;
   fileCheckpointLastSavedSec: number;
   pendingSegmentMetaQueue: Array<{ startSec: number | null; endSec: number | null; durationSec: number }>;
+  modelLoadUiActive: boolean;
   silenceStartedAtMs: number;
   silenceUiTicker: number | null;
   pendingSilenceCommitTimer: number | null;
@@ -67,6 +68,8 @@ export class App {
   copyLastLapToClipboard(): Promise<void>;
   copySubjectToClipboard(lapId?: string | null): Promise<void>;
   exportTranscriptAsTxt(): void;
+  handleModelLoadState(data: any): void;
+  clearWebGpuData(): Promise<void>;
   copyTranscriptLineToClipboard(text: string): Promise<void>;
   writeToClipboard(text: string): Promise<boolean>;
   buildBackendParams(mode?: "mic" | "file"): {

@@ -2,6 +2,7 @@ export class ConfigManager {
   constructor() {
     this.defaults = {
       model: 'medium',
+      backendMode: 'python',
       threshold: 0.0015,
       window: 4,
       interval: 0.5,
@@ -18,6 +19,7 @@ export class ConfigManager {
 
     this.globalKeys = [
       'language',
+      'backendMode',
       'lapVoicePhrase',
       'lapVoiceMatchMode',
       'copyVoicePhrase',

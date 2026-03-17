@@ -15,11 +15,11 @@ body {
     background: var(--bg-color);
     color: var(--text-color);
     display: flex;
-    justify-content: center;
+    justify-content: stretch;
 }
 
 .container {
-    max-width: 900px;
+    max-width: none;
     width: 100%;
     display: flex;
     flex-direction: column;
@@ -79,20 +79,24 @@ h1 {
 /* Controls Section */
 .controls-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 12px;
     align-items: end;
 }
 
 .control-sections {
-    display: grid;
+    display: flex;
+    flex-wrap: wrap;
     gap: 14px;
+    margin-bottom: 10px;
 }
 
 .config-box {
     border-radius: 10px;
     border: 1px solid var(--border-color);
     padding: 12px;
+    flex: 1 1 420px;
+    min-width: min(360px, 100%);
 }
 
 .config-family {
@@ -105,11 +109,16 @@ h1 {
     border-color: #bae6fd;
 }
 
+.config-debug {
+    background: #f5f3ff;
+    border-color: #c4b5fd;
+}
+
 .config-box-header {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
 }
 
 .config-box-title {
@@ -117,6 +126,39 @@ h1 {
     font-size: 0.92rem;
     color: #334155;
     font-weight: 700;
+}
+
+.config-collapsible {
+    width: 100%;
+}
+
+.config-collapsible > summary {
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.config-collapsible > summary::-webkit-details-marker {
+    display: none;
+}
+
+.config-collapsible > summary::after {
+    content: '+';
+    margin-left: auto;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #64748b;
+}
+
+.config-collapsible[open] > summary::after {
+    content: '-';
+}
+
+.config-collapsible > :not(summary) {
+    margin-top: 10px;
 }
 
 .scope-chip {
@@ -140,10 +182,17 @@ h1 {
     border: 1px solid #7dd3fc;
 }
 
+.scope-debug {
+    background: #ede9fe;
+    color: #6d28d9;
+    border: 1px solid #c4b5fd;
+}
+
 .control-group {
     display: flex;
     flex-direction: column;
     gap: 6px;
+    min-width: 0;
 }
 
 label {
@@ -159,6 +208,31 @@ input, select {
     font-size: 14px;
     width: 100%;
     box-sizing: border-box;
+}
+
+.field-button {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: #ffffff;
+    color: #374151;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: left;
+}
+
+.field-button-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 8px;
+}
+
+.storage-info {
+    margin-top: 6px;
+    font-size: 0.82rem;
+    color: #475569;
+    font-family: 'Consolas', 'Monaco', monospace;
 }
 
 /* Buttons */
@@ -200,19 +274,28 @@ button:hover { opacity: 0.9; }
 #processFileBtn { background: #0f766e; color: white; }
 #lapBtn { background: var(--secondary-color); color: white; }
 #stopBtn { background: var(--danger-color); color: white; }
-#clearStorageBtn { background: #9a3412; color: white; }
 
 /* Indicators */
 .indicators {
     display: flex;
     flex-wrap: wrap;
-    gap: 16px;
+    gap: 10px 14px;
     font-size: 0.9rem;
     background: #f9fafb;
-    padding: 12px;
+    padding: 10px;
     border-radius: 8px;
-    margin-top: 16px;
+    margin-top: 0;
     border: 1px solid #eee;
+}
+
+.indicators-audio {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+}
+
+.debug-grid {
+    display: grid;
+    gap: 10px;
 }
 
 .indicator-item {
@@ -299,9 +382,10 @@ button:hover { opacity: 0.9; }
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 12px;
-    min-height: 140px;
-    max-height: 260px;
+    min-height: 260px;
+    max-height: 520px;
     overflow-y: auto;
+    resize: vertical;
     font-size: 15px;
     line-height: 1.4;
     box-sizing: border-box;
@@ -521,8 +605,8 @@ button:hover { opacity: 0.9; }
 
 /* Logs */
 #log {
-    min-height: 120px;
-    max-height: 300px;
+    min-height: 70px;
+    max-height: 170px;
     overflow-y: auto;
     background: #1e1e1e;
     color: #d4d4d4;
@@ -543,4 +627,11 @@ button:hover { opacity: 0.9; }
 #modelStatus {
     font-size: 0.9rem;
     color: #666;
+}
+
+@media (max-width: 1024px) {
+    .config-box {
+        flex-basis: 100%;
+        min-width: 0;
+    }
 }

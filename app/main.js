@@ -22,7 +22,8 @@ export class App {
       minSpeak: this.config.get('minSpeak'),
       minSilence: this.config.get('minSilence')
     });
-    this.backend = createBackendClient('ws');
+    const backendMode = this.config.get('backendMode') === 'webgpu' ? 'webgpu' : 'ws';
+    this.backend = createBackendClient(backendMode);
     this.transcriptItems = [];
     this.lapCount = 0;
     this.lastFinalText = '';
@@ -45,6 +46,7 @@ export class App {
     this.fileTranscriptOffsetSec = null;
     this.fileCheckpointLastSavedSec = -1;
     this.pendingSegmentMetaQueue = [];
+    this.modelLoadUiActive = false;
     this.silenceStartedAtMs = 0;
     this.silenceUiTicker = null;
     this.pendingSilenceCommitTimer = null;
@@ -78,11 +80,22 @@ export class App {
     this.ui.subscribe('lap', () => this.addLapMarker());
     this.ui.subscribe('stop', () => this.stopStreaming());
     this.ui.subscribe('clearStorage', () => this.resetTranscriptStorage());
+    this.ui.subscribe('clearWebGpuData', () => this.clearWebGpuData());
     this.ui.subscribe('exportTxt', () => this.exportTranscriptAsTxt());
     this.ui.subscribe('copyLastLap', () => this.copyLastLapToClipboard());
     this.ui.subscribe('copySubject', ({ lapId }) => this.copySubjectToClipboard(lapId));
     this.ui.subscribe('copyLine', ({ text }) => this.copyTranscriptLineToClipboard(text));
     this.ui.subscribe('configChange', ({ key, value }) => {
+      if (key === 'backendMode') {
+        const previous = this.config.get('backendMode');
+        this.config.set(key, value);
+        if (previous !== value) {
+          this.ui.addLog(`Backend implementation changed to ${value}. Reloading...`);
+          setTimeout(() => window.location.reload(), 250);
+        }
+        return;
+      }
+
       const previousModel = this.config.get('model');
       this.config.set(key, value);
       
@@ -228,6 +241,12 @@ export class App {
     this.backend.subscribe('message', (data) => {
       if (data.type === 'models') {
         this.ui.updateModelSelect(data);
+      }
+      if (data.type === 'webgpu_storage_info') {
+        this.ui.setWebGpuStorageInfo(data);
+      }
+      if (data.type === 'model_load_state') {
+        this.handleModelLoadState(data);
       }
       if (data.type === 'language_update') {
         this.ui.updateLoadedLanguage(data.language);
@@ -563,6 +582,57 @@ export class App {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
     this.ui.addLog(`Exported TXT (${lines.length} lines).`);
+  }
+
+  handleModelLoadState(data) {
+    if (!data || typeof data !== 'object') return;
+    if (this.processingMode === 'file') return;
+    const stage = data.stage || '';
+    if (stage === 'start' || stage === 'resolve') {
+      this.modelLoadUiActive = true;
+      this.ui.setFileProgress(0, 0, true, data.label || 'Loading model', data.detail || 'Preparing...');
+      return;
+    }
+    if (stage === 'progress') {
+      this.modelLoadUiActive = true;
+      const pct = Math.max(0, Math.min(100, Number(data.progressPct) || 0));
+      const detail = data.detail ? `${pct}% • ${data.detail}` : `${pct}%`;
+      this.ui.setFileProgress(pct, 100, true, data.label || 'Loading model', detail);
+      return;
+    }
+    if (stage === 'done') {
+      const elapsedMs = Number(data.elapsedMs) || 0;
+      const elapsedSec = elapsedMs > 0 ? (elapsedMs / 1000).toFixed(2) : null;
+      if (data.fromCacheLikely) {
+        this.ui.addLog(`WebGPU model ready from cache${elapsedSec ? ` in ${elapsedSec}s` : ''}.`);
+      } else {
+        this.ui.addLog(`WebGPU model ready${elapsedSec ? ` in ${elapsedSec}s` : ''}.`);
+      }
+      this.modelLoadUiActive = false;
+      this.ui.setFileProgress(0, 0, false);
+      return;
+    }
+    if (stage === 'error') {
+      this.modelLoadUiActive = false;
+      this.ui.setFileProgress(0, 0, false);
+      if (data.detail) this.ui.addLog(`WebGPU model load error: ${data.detail}`);
+    }
+  }
+
+  async clearWebGpuData() {
+    const clearFn = this.backend && typeof this.backend.clearCachedData === 'function'
+      ? this.backend.clearCachedData.bind(this.backend)
+      : null;
+    if (!clearFn) {
+      this.ui.addLog('Clear WebGPU data is only available when using WebGPU backend.');
+      return;
+    }
+    try {
+      await clearFn();
+      this.ui.addLog('Cleared WebGPU data.');
+    } catch (err) {
+      this.ui.addLog(`Failed to clear WebGPU data: ${err?.message || err}`);
+    }
   }
 
   async copyTranscriptLineToClipboard(text) {

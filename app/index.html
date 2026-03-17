@@ -11,7 +11,6 @@
   <div class="container">
     <h1>Live Whisper Transcription</h1>
 
-    <!-- Main Controls Card -->
     <div class="card">
       <div class="button-group">
         <button id="startBtn" type="button" aria-keyshortcuts="Shift+S">Start Mic <span class="shortcut-hint">Shift+S</span></button>
@@ -19,15 +18,14 @@
         <input id="audioFileInput" type="file" accept=".mp3,.wav,.m4a,.aac,.ogg,audio/*" style="display:none">
         <button id="lapBtn" type="button" aria-keyshortcuts="Shift+L">New Subject <span class="shortcut-hint">Shift+L</span></button>
         <button id="stopBtn" type="button" aria-keyshortcuts="Shift+X">Stop <span class="shortcut-hint">Shift+X</span></button>
-        <button id="clearStorageBtn" type="button">Clear Storage</button>
       </div>
 
       <div class="control-sections">
-        <section class="config-box config-family">
-          <div class="config-box-header">
+        <details class="config-box config-family config-collapsible">
+          <summary class="config-box-header">
             <span class="scope-chip scope-family">Família</span>
             <h2 class="config-box-title">Configurações do Modelo</h2>
-          </div>
+          </summary>
           <div class="controls-grid">
             <div class="control-group">
               <label for="modelSelect" title="Select the Whisper model size. Larger models are more accurate but slower.">Model</label>
@@ -58,13 +56,13 @@
               <input type="number" id="partialIntervalMaxInput" step="100" min="0" value="1500">
             </div>
           </div>
-        </section>
+        </details>
 
-        <section class="config-box config-global">
-          <div class="config-box-header">
+        <details class="config-box config-global config-collapsible">
+          <summary class="config-box-header">
             <span class="scope-chip scope-global">Global</span>
             <h2 class="config-box-title">Configurações Globais</h2>
-          </div>
+          </summary>
           <div class="controls-grid">
             <div class="control-group">
               <label for="languageInput" title="Language code for transcription (e.g., 'en', 'pt', 'auto'). Full names like 'portuguese' are also supported.">
@@ -87,68 +85,88 @@
               <label for="copyVoicePhraseInput" title="If a final transcription starts with this phrase, the app copies the last subject and does not save this command in history. Matching is case-insensitive and always starts with.">Copy Voice Phrase</label>
               <input type="text" id="copyVoicePhraseInput" value="copy last subject" placeholder="e.g. copy last subject">
             </div>
+            <div class="control-group">
+              <label>Storage</label>
+              <div class="field-button-row">
+                <button id="clearStorageBtn" type="button" class="field-button">Clear Transcriptions History</button>
+                <button id="clearWebGpuDataBtn" type="button" class="field-button">Clear WebGPU Data</button>
+              </div>
+            </div>
+            <div class="control-group">
+              <div id="webgpuStorageInfo" class="storage-info">WebGPU storage: --</div>
+            </div>
+            <div class="control-group">
+              <label for="backendModeInput" title="Select transcription backend implementation. Python uses local server; WebGPU runs directly in browser using GPU.">Backend Implementation</label>
+              <select id="backendModeInput">
+                <option value="python">Python backend</option>
+                <option value="webgpu">WebGPU (browser)</option>
+              </select>
+            </div>
           </div>
-        </section>
-      </div>
+        </details>
 
-      <div class="indicators">
-        <div class="indicator-item">
-            <strong>Level:</strong> <span id="levelIndicator">--</span>
-        </div>
-        <div class="indicator-item">
-            <strong>State:</strong> <span id="stateIndicator">idle</span>
-        </div>
-        <div class="indicator-item">
-            <strong>Partial Now:</strong> <span id="partialIntervalCurrentIndicator">--</span>
-        </div>
-        <div class="indicator-item">
-            <strong>Silence:</strong> <span id="silenceDurationIndicator">0 ms</span>
-        </div>
-        <div class="indicator-item">
-            <strong>Suggested:</strong> <span id="suggestedIndicator">--</span>
-        </div>
-        <div class="indicator-item">
-             <span id="modelStatus"></span>
-        </div>
-      </div>
+        <details class="config-box config-debug config-collapsible">
+          <summary class="config-box-header">
+            <span class="scope-chip scope-debug">Debug</span>
+            <h2 class="config-box-title">Debug Info</h2>
+          </summary>
+          <div class="debug-grid">
+            <div class="indicators">
+              <div class="indicator-item">
+                  <strong>Level:</strong> <span id="levelIndicator">--</span>
+              </div>
+              <div class="indicator-item">
+                  <strong>State:</strong> <span id="stateIndicator">idle</span>
+              </div>
+              <div class="indicator-item">
+                  <strong>Partial Now:</strong> <span id="partialIntervalCurrentIndicator">--</span>
+              </div>
+              <div class="indicator-item">
+                  <strong>Silence:</strong> <span id="silenceDurationIndicator">0 ms</span>
+              </div>
+              <div class="indicator-item">
+                  <strong>Suggested:</strong> <span id="suggestedIndicator">--</span>
+              </div>
+              <div class="indicator-item">
+                  <span id="modelStatus"></span>
+              </div>
+            </div>
 
-      <!-- Audio Stats -->
-      <div class="indicators" style="margin-top: 8px; background: #f0fdf4; border-color: #bbf7d0;">
-        <div class="indicator-item">
-          <strong>RMS:</strong> <span id="statRms">--</span>
-        </div>
-        <div class="indicator-item">
-          <strong>ZCR:</strong> <span id="statZcr">--</span>
-        </div>
-        <div class="indicator-item">
-          <strong>Noise Floor:</strong> <span id="statNoiseFloor">--</span>
-        </div>
-        <div class="indicator-item">
-          <strong>Dyn Thresh:</strong> <span id="statDynamicThreshold">--</span>
-        </div>
-        <div class="indicator-item">
-          <strong>Speech Score:</strong> <span id="statSpeechScore">--</span>
-        </div>
-        <br />
-        <div class="indicator-item">
-          <strong>Is Speech:</strong> <span id="statIsSpeech">--</span>
-        </div>
-        <div class="indicator-item">
-          <strong>Score (smooth):</strong> <span id="statSmoothedSpeechScore">--</span>
-        </div>
-        <div class="indicator-item">
-          <strong>Voice Band Ratio:</strong> <span id="statVoiceBandRatio">--</span>
-        </div>
-        <div class="indicator-item">
-          <strong>Total Spectral Energy:</strong> <span id="statTotalEnergy">--</span>
-        </div>
-        <div class="indicator-item">
-          <strong>Is Silent:</strong> <span id="statIsSilent">--</span>
-        </div>
-      </div>
-      
-      <div style="margin-top: 12px;">
-        <div id="status">Idle.</div>
+            <div class="indicators indicators-audio">
+              <div class="indicator-item">
+                <strong>RMS:</strong> <span id="statRms">--</span>
+              </div>
+              <div class="indicator-item">
+                <strong>ZCR:</strong> <span id="statZcr">--</span>
+              </div>
+              <div class="indicator-item">
+                <strong>Noise Floor:</strong> <span id="statNoiseFloor">--</span>
+              </div>
+              <div class="indicator-item">
+                <strong>Dyn Thresh:</strong> <span id="statDynamicThreshold">--</span>
+              </div>
+              <div class="indicator-item">
+                <strong>Speech Score:</strong> <span id="statSpeechScore">--</span>
+              </div>
+              <div class="indicator-item">
+                <strong>Is Speech:</strong> <span id="statIsSpeech">--</span>
+              </div>
+              <div class="indicator-item">
+                <strong>Score (smooth):</strong> <span id="statSmoothedSpeechScore">--</span>
+              </div>
+              <div class="indicator-item">
+                <strong>Voice Band Ratio:</strong> <span id="statVoiceBandRatio">--</span>
+              </div>
+              <div class="indicator-item">
+                <strong>Total Spectral Energy:</strong> <span id="statTotalEnergy">--</span>
+              </div>
+              <div class="indicator-item">
+                <strong>Is Silent:</strong> <span id="statIsSilent">--</span>
+              </div>
+            </div>
+          </div>
+          <div id="status">Idle.</div>
+        </details>
       </div>
     </div>
 
@@ -201,8 +219,10 @@
 
     <!-- Logs -->
     <div class="card">
-      <div class="card-header">System Logs</div>
-      <pre id="log"></pre>
+      <details class="config-collapsible">
+        <summary class="card-header">System Logs</summary>
+        <pre id="log"></pre>
+      </details>
     </div>
 
   </div>

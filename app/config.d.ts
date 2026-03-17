@@ -1,5 +1,6 @@
 export interface AppConfigState {
   model: string;
+  backendMode: "python" | "webgpu";
   threshold: number;
   window: number;
   interval: number;

@@ -1,4 +1,5 @@
 import { WSClient } from './wsClient.js';
+import { WebGPUBackendClient } from './webgpuClient.js';
 
 class SocketBackendClient {
   constructor() {
@@ -50,5 +51,6 @@ class SocketBackendClient {
 
 export function createBackendClient(mode = 'ws') {
   if (mode === 'ws') return new SocketBackendClient();
+  if (mode === 'webgpu') return new WebGPUBackendClient();
   throw new Error(`Unsupported backend client mode: ${mode}`);
 }

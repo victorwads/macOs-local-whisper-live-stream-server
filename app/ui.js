@@ -8,6 +8,8 @@ export class UIManager {
       lapBtn: document.getElementById('lapBtn'),
       stopBtn: document.getElementById('stopBtn'),
       clearStorageBtn: document.getElementById('clearStorageBtn'),
+      clearWebGpuDataBtn: document.getElementById('clearWebGpuDataBtn'),
+      webgpuStorageInfo: document.getElementById('webgpuStorageInfo'),
       exportTxtBtn: document.getElementById('exportTxtBtn'),
       copyLastLapBtn: document.getElementById('copyLastLapBtn'),
       transcript: document.getElementById('transcript'),
@@ -17,6 +19,7 @@ export class UIManager {
       minSilenceInput: document.getElementById('minSilenceInput'),
       minSpeakInput: document.getElementById('minSpeakInput'),
       maxSecondsInput: document.getElementById('maxSecondsInput'),
+      backendModeInput: document.getElementById('backendModeInput'),
       languageInput: document.getElementById('languageInput'),
       lapVoicePhraseInput: document.getElementById('lapVoicePhraseInput'),
       lapVoiceMatchModeInput: document.getElementById('lapVoiceMatchModeInput'),
@@ -56,6 +59,7 @@ export class UIManager {
       lap: [],
       stop: [],
       clearStorage: [],
+      clearWebGpuData: [],
       exportTxt: [],
       copyLastLap: [],
       copySubject: [],
@@ -79,6 +83,7 @@ export class UIManager {
     if (this.dom.minSilenceInput) this.dom.minSilenceInput.value = this.config.get('minSilence');
     if (this.dom.minSpeakInput) this.dom.minSpeakInput.value = this.config.get('minSpeak');
     if (this.dom.maxSecondsInput) this.dom.maxSecondsInput.value = this.config.get('maxSeconds');
+    if (this.dom.backendModeInput) this.dom.backendModeInput.value = this.config.get('backendMode');
     if (this.dom.languageInput) this.dom.languageInput.value = this.config.get('language');
     if (this.dom.lapVoicePhraseInput) this.dom.lapVoicePhraseInput.value = this.config.get('lapVoicePhrase');
     if (this.dom.lapVoiceMatchModeInput) this.dom.lapVoiceMatchModeInput.value = this.config.get('lapVoiceMatchMode');
@@ -104,6 +109,7 @@ export class UIManager {
     this.dom.lapBtn?.addEventListener('click', () => this.emit('lap'));
     this.dom.stopBtn?.addEventListener('click', () => this.emit('stop'));
     this.dom.clearStorageBtn?.addEventListener('click', () => this.emit('clearStorage'));
+    this.dom.clearWebGpuDataBtn?.addEventListener('click', () => this.emit('clearWebGpuData'));
     this.dom.exportTxtBtn?.addEventListener('click', () => this.emit('exportTxt'));
     this.dom.copyLastLapBtn?.addEventListener('click', () => this.emit('copyLastLap'));
 
@@ -134,6 +140,10 @@ export class UIManager {
 
     this.dom.modelSelect?.addEventListener('change', () => {
       this.emit('configChange', { key: 'model', value: this.dom.modelSelect.value });
+    });
+
+    this.dom.backendModeInput?.addEventListener('change', () => {
+      this.emit('configChange', { key: 'backendMode', value: this.dom.backendModeInput.value });
     });
 
     this.dom.final?.addEventListener('click', (event) => {
@@ -417,7 +427,25 @@ export class UIManager {
     this.dom.pipelineStatus.textContent = text || '';
   }
 
-  setFileProgress(currentSec, totalSec, active = false, modeLabel = 'Processing File') {
+  setWebGpuStorageInfo(info) {
+    if (!this.dom.webgpuStorageInfo) return;
+    if (!info || typeof info !== 'object') {
+      this.dom.webgpuStorageInfo.textContent = 'WebGPU storage: --';
+      return;
+    }
+    const usageGb = Number.isFinite(info.usageBytes) ? (Number(info.usageBytes) / 1e9) : null;
+    const quotaGb = Number.isFinite(info.quotaBytes) ? (Number(info.quotaBytes) / 1e9) : null;
+    const modelGb = Number.isFinite(info.modelEstimateBytes) ? (Number(info.modelEstimateBytes) / 1e9) : null;
+    const browserPart = usageGb !== null
+      ? `browser ${usageGb.toFixed(2)} GB${quotaGb !== null ? ` / ${quotaGb.toFixed(2)} GB` : ''}`
+      : 'browser --';
+    const modelPart = modelGb !== null
+      ? `models ~${modelGb.toFixed(2)} GB`
+      : 'models --';
+    this.dom.webgpuStorageInfo.textContent = `WebGPU storage: ${browserPart} | ${modelPart}`;
+  }
+
+  setFileProgress(currentSec, totalSec, active = false, modeLabel = 'Processing File', customText = '') {
     const wrapper = this.dom.fileProgress;
     const mode = this.dom.fileProgressLabel;
     const fill = this.dom.fileProgressFill;
@@ -439,7 +467,7 @@ export class UIManager {
     if (!Number.isFinite(totalSec) || totalSec <= 0) {
       fill.classList.add('file-progress-fill-indeterminate');
       fill.style.width = '100%';
-      label.textContent = modeLabel === 'Decoding file' ? 'Preparing audio...' : 'Waiting...';
+      label.textContent = customText || (modeLabel === 'Decoding file' ? 'Preparing audio...' : 'Waiting...');
       return;
     }
 
@@ -447,7 +475,7 @@ export class UIManager {
     const pct = Math.max(0, Math.min(100, (current / totalSec) * 100));
     fill.classList.remove('file-progress-fill-indeterminate');
     fill.style.width = `${pct.toFixed(2)}%`;
-    label.textContent = `${this.formatRelativeTime(current)} / ${this.formatRelativeTime(totalSec)}`;
+    label.textContent = customText || `${this.formatRelativeTime(current)} / ${this.formatRelativeTime(totalSec)}`;
   }
 
   setTranscriptItems(items) {

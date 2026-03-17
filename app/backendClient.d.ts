@@ -18,6 +18,7 @@ export interface BackendClient {
   requestModels(): void;
   setParams(params: BackendSetParamsPayload): void;
   triggerPartial(intervalMs: number): void;
+  clearCachedData?(): Promise<void>;
 }
 
-export function createBackendClient(mode?: "ws"): BackendClient;
+export function createBackendClient(mode?: "ws" | "webgpu"): BackendClient;
