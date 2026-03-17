@@ -1,6 +1,7 @@
 export class UIManager {
   constructor(configManager) {
     this.config = configManager;
+    this.autoScrollStorageKey = 'whisper:ui:auto-scroll:v1';
     this.dom = {
       startBtn: document.getElementById('startBtn'),
       processFileBtn: document.getElementById('processFileBtn'),
@@ -11,6 +12,7 @@ export class UIManager {
       clearWebGpuDataBtn: document.getElementById('clearWebGpuDataBtn'),
       exportTxtBtn: document.getElementById('exportTxtBtn'),
       copyLastLapBtn: document.getElementById('copyLastLapBtn'),
+      autoScrollToggle: document.getElementById('autoScrollToggle'),
       transcript: document.getElementById('transcript'),
       final: document.getElementById('finalTranscript'),
       status: document.getElementById('status'),
@@ -70,6 +72,7 @@ export class UIManager {
 
     this.levelHistory = [];
     this.finals = [];
+    this.autoScrollEnabled = this.loadAutoScrollPreference();
 
     this.initInputs();
     this.bindEvents();
@@ -91,6 +94,7 @@ export class UIManager {
     if (this.dom.copyVoicePhraseInput) this.dom.copyVoicePhraseInput.value = this.config.get('copyVoicePhrase');
     if (this.dom.partialIntervalMinInput) this.dom.partialIntervalMinInput.value = this.config.get('partialIntervalMin');
     if (this.dom.partialIntervalMaxInput) this.dom.partialIntervalMaxInput.value = this.config.get('partialIntervalMax');
+    if (this.dom.autoScrollToggle) this.dom.autoScrollToggle.checked = this.autoScrollEnabled;
     // Also update model select if needed, though usually it triggers the change
     if (this.dom.modelSelect && this.dom.modelSelect.value !== this.config.get('model')) {
         this.dom.modelSelect.value = this.config.get('model');
@@ -113,6 +117,10 @@ export class UIManager {
     this.dom.clearWebGpuDataBtn?.addEventListener('click', () => this.emit('clearWebGpuData'));
     this.dom.exportTxtBtn?.addEventListener('click', () => this.emit('exportTxt'));
     this.dom.copyLastLapBtn?.addEventListener('click', () => this.emit('copyLastLap'));
+    this.dom.autoScrollToggle?.addEventListener('change', () => {
+      const enabled = Boolean(this.dom.autoScrollToggle?.checked);
+      this.setAutoScrollEnabled(enabled);
+    });
 
     const bindInput = (el, key, isFloat = true) => {
       el?.addEventListener('input', () => {
@@ -700,7 +708,33 @@ export class UIManager {
   }
 
   scrollTranscriptToBottom() {
+    if (!this.autoScrollEnabled) return;
     if (!this.dom.transcript) return;
     this.dom.transcript.scrollTop = this.dom.transcript.scrollHeight;
+  }
+
+  loadAutoScrollPreference() {
+    try {
+      const raw = localStorage.getItem(this.autoScrollStorageKey);
+      if (raw === null) return true;
+      return raw !== '0';
+    } catch (_err) {
+      return true;
+    }
+  }
+
+  setAutoScrollEnabled(enabled) {
+    this.autoScrollEnabled = Boolean(enabled);
+    try {
+      localStorage.setItem(this.autoScrollStorageKey, this.autoScrollEnabled ? '1' : '0');
+    } catch (_err) {
+      // ignore storage failures
+    }
+    if (this.dom.autoScrollToggle) {
+      this.dom.autoScrollToggle.checked = this.autoScrollEnabled;
+    }
+    if (this.autoScrollEnabled) {
+      this.scrollTranscriptToBottom();
+    }
   }
 }
