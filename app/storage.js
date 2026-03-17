@@ -1,4 +1,7 @@
 const TRANSCRIPT_ITEMS_KEY = 'whisper:transcript:items:v1';
+const AUDIO_DB_NAME = 'whisper-audio-db';
+const AUDIO_STORE_NAME = 'segments';
+const AUDIO_DB_VERSION = 1;
 
 export function loadTranscriptItems() {
   try {
@@ -33,6 +36,61 @@ export function clearTranscriptStorage() {
   }
 }
 
+export async function saveTranscriptAudio(audioId, blob, meta = {}) {
+  if (!audioId || !(blob instanceof Blob)) return false;
+  try {
+    const db = await openAudioDb();
+    await withStore(db, 'readwrite', (store) => {
+      store.put({
+        id: audioId,
+        blob,
+        createdAt: Date.now(),
+        durationSec: normalizeNullableNumber(meta.durationSec),
+      });
+    });
+    return true;
+  } catch (err) {
+    console.warn('Failed to save transcript audio:', err);
+    return false;
+  }
+}
+
+export async function loadTranscriptAudio(audioId) {
+  if (!audioId) return null;
+  try {
+    const db = await openAudioDb();
+    const record = await withStore(db, 'readonly', (store) => store.get(audioId));
+    if (!record || !(record.blob instanceof Blob)) return null;
+    return record.blob;
+  } catch (err) {
+    console.warn('Failed to load transcript audio:', err);
+    return null;
+  }
+}
+
+export async function deleteTranscriptAudio(audioId) {
+  if (!audioId) return;
+  try {
+    const db = await openAudioDb();
+    await withStore(db, 'readwrite', (store) => {
+      store.delete(audioId);
+    });
+  } catch (err) {
+    console.warn('Failed to delete transcript audio:', err);
+  }
+}
+
+export async function clearTranscriptAudioStorage() {
+  try {
+    const db = await openAudioDb();
+    await withStore(db, 'readwrite', (store) => {
+      store.clear();
+    });
+  } catch (err) {
+    console.warn('Failed to clear transcript audio storage:', err);
+  }
+}
+
 function isValidTranscriptItem(value) {
   if (!value || typeof value !== 'object') return false;
   const item = value;
@@ -55,6 +113,7 @@ function normalizeTranscriptItem(value) {
       audioDurationSec: normalizeNullableNumber(item.audioDurationSec),
       partialsSent: normalizeNullableNumber(item.partialsSent),
       relativeTimeSec: normalizeNullableNumber(item.relativeTimeSec),
+      audioId: typeof item.audioId === 'string' ? item.audioId : null,
     };
   }
 
@@ -74,6 +133,7 @@ function normalizeTranscriptItem(value) {
     audioDurationSec: normalizeNullableNumber(item.audioDurationSec),
     partialsSent: normalizeNullableNumber(item.partialsSent),
     relativeTimeSec: normalizeNullableNumber(item.relativeTimeSec),
+    audioId: typeof item.audioId === 'string' ? item.audioId : null,
   };
 }
 
@@ -81,4 +141,38 @@ function normalizeNullableNumber(value) {
   if (value === null || value === undefined || value === '') return null;
   const num = Number(value);
   return Number.isFinite(num) ? num : null;
+}
+
+function openAudioDb() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(AUDIO_DB_NAME, AUDIO_DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(AUDIO_STORE_NAME)) {
+        db.createObjectStore(AUDIO_STORE_NAME, { keyPath: 'id' });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function withStore(db, mode, action) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(AUDIO_STORE_NAME, mode);
+    const store = tx.objectStore(AUDIO_STORE_NAME);
+    const request = action(store);
+    let requestResult;
+
+    if (request && typeof request === 'object' && 'onsuccess' in request) {
+      request.onsuccess = () => {
+        requestResult = request.result;
+      };
+      request.onerror = () => reject(request.error);
+    }
+
+    tx.oncomplete = () => resolve(requestResult);
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
 }

@@ -50,6 +50,7 @@ export class UIManager {
       fileProgressLabel: document.getElementById('fileProgressLabel'),
       fileProgressFill: document.getElementById('fileProgressFill'),
       fileProgressTime: document.getElementById('fileProgressTime'),
+      transcriptAudioPlayer: document.getElementById('transcriptAudioPlayer'),
     };
 
     this.listeners = {
@@ -63,6 +64,7 @@ export class UIManager {
       copyLastLap: [],
       copySubject: [],
       copyLine: [],
+      playAudio: [],
       configChange: []
     };
 
@@ -156,6 +158,14 @@ export class UIManager {
       }
       const line = target.closest('.transcript-line');
       if (!line) return;
+      const playBtn = target.closest('.transcript-play-btn');
+      if (playBtn instanceof HTMLElement) {
+        const audioId = playBtn.dataset.audioId || '';
+        if (audioId) {
+          this.emit('playAudio', { audioId });
+        }
+        return;
+      }
       this.selectTranscriptLine(line);
       const textEl = line.querySelector('.transcript-text');
       const text = (textEl?.textContent || '').trim();
@@ -294,30 +304,6 @@ export class UIManager {
     if (!Number.isFinite(audioSec) || !Number.isFinite(processingSec)) return;
     const msg = `[${type}] Processed ${audioSec.toFixed(2)}s audio in ${processingSec.toFixed(2)}s`;
     this.addLog(msg);
-  }
-
-  addAudioLog(blobUrl, durationMs) {
-    if (!this.dom.log) return;
-    const ts = new Date().toLocaleTimeString();
-    const container = document.createElement('div');
-    container.style.borderBottom = '1px solid #333';
-    container.style.padding = '8px 0';
-    container.style.display = 'flex';
-    container.style.flexDirection = 'column';
-    container.style.gap = '4px';
-
-    const info = document.createElement('div');
-    info.textContent = `[${ts}] Speech Segment (${(durationMs / 1000).toFixed(2)}s)`;
-    
-    const audio = document.createElement('audio');
-    audio.controls = true;
-    audio.src = blobUrl;
-    audio.style.width = '100%';
-    audio.style.height = '32px';
-
-    container.appendChild(info);
-    container.appendChild(audio);
-    this.dom.log.prepend(container);
   }
 
   updateAudioStats(stats) {
@@ -594,6 +580,20 @@ export class UIManager {
       audio.textContent = ` ${audioLabel}`;
     }
 
+    const playButton = document.createElement('button');
+    playButton.type = 'button';
+    playButton.className = 'transcript-play-btn';
+    playButton.textContent = '▶';
+    playButton.title = 'Play segment audio';
+    playButton.setAttribute('aria-label', 'Play segment audio');
+    if (item.audioId) {
+      playButton.dataset.audioId = item.audioId;
+    } else {
+      playButton.disabled = true;
+      playButton.setAttribute('aria-disabled', 'true');
+    }
+
+    line.appendChild(playButton);
     line.appendChild(timestamp);
     if (audioLabel) line.appendChild(audio);
     line.appendChild(text);
@@ -603,6 +603,23 @@ export class UIManager {
     if (partialsLabel) line.appendChild(partials);
     this.dom.final.appendChild(line);
     this.scrollTranscriptToBottom();
+  }
+
+  setTranscriptAudioSource(url) {
+    if (!this.dom.transcriptAudioPlayer) return;
+    this.dom.transcriptAudioPlayer.src = url || '';
+    if (url) {
+      this.dom.transcriptAudioPlayer.load();
+    }
+  }
+
+  async playTranscriptAudio() {
+    if (!this.dom.transcriptAudioPlayer?.src) return;
+    try {
+      await this.dom.transcriptAudioPlayer.play();
+    } catch (_err) {
+      // no-op
+    }
   }
 
   formatItemTimestamp(item) {

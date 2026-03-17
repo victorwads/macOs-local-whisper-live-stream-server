@@ -6,7 +6,14 @@ import { AudioSegmenter } from './audioSegmenter.js';
 import { AudioFileProcessor } from './audioFileProcessor.js';
 import { createBackendClient } from './backendClient.js';
 import { encodeWAV } from './utils.js';
-import { appendTranscriptItem, clearTranscriptStorage, loadTranscriptItems } from './storage.js';
+import {
+  appendTranscriptItem,
+  clearTranscriptAudioStorage,
+  clearTranscriptStorage,
+  loadTranscriptAudio,
+  loadTranscriptItems,
+  saveTranscriptAudio,
+} from './storage.js';
 
 export class App {
   constructor() {
@@ -55,6 +62,7 @@ export class App {
     this.silenceUiTicker = null;
     this.pendingSilenceCommitTimer = null;
     this.backendConnected = false;
+    this.currentTranscriptAudioUrl = '';
 
     this.init();
   }
@@ -91,6 +99,7 @@ export class App {
     this.ui.subscribe('copyLastLap', () => this.copyLastLapToClipboard());
     this.ui.subscribe('copySubject', ({ lapId }) => this.copySubjectToClipboard(lapId));
     this.ui.subscribe('copyLine', ({ text }) => this.copyTranscriptLineToClipboard(text));
+    this.ui.subscribe('playAudio', ({ audioId }) => this.playTranscriptAudio(audioId));
     this.ui.subscribe('configChange', ({ key, value }) => {
       if (key === 'backendMode') {
         const previous = this.config.get('backendMode');
@@ -219,12 +228,15 @@ export class App {
       this.backend.sendAudio(chunk);
     });
 
-    this.segmenter.subscribe('segmentReady', ({ audio, duration, startSec, endSec }) => {
+    this.segmenter.subscribe('segmentReady', async ({ audio, duration, startSec, endSec }) => {
+      const audioId = typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `audio-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
       const wavView = encodeWAV(audio, 16000);
       const blob = new Blob([wavView], { type: 'audio/wav' });
-      const url = URL.createObjectURL(blob);
-      this.ui.addAudioLog(url, duration);
+      await saveTranscriptAudio(audioId, blob, { durationSec: duration / 1000 });
       this.pendingSegmentMetaQueue.push({
+        audioId,
         startSec: Number.isFinite(startSec) ? Number(startSec) : null,
         endSec: Number.isFinite(endSec) ? Number(endSec) : null,
         durationSec: duration / 1000,
@@ -312,6 +324,7 @@ export class App {
           partialsSent: partialsCountForFinal,
           relativeTimeSec,
           sourceFileKey: this.processingMode === 'file' ? this.currentFileKey : null,
+          audioId: segmentMeta?.audioId ?? null,
         }));
         if (this.processingMode === 'file' && this.currentFileKey && Number.isFinite(this.fileTranscriptOffsetSec)) {
           this.saveFileCheckpoint({
@@ -378,6 +391,7 @@ export class App {
       partialsSent: meta.partialsSent ?? null,
       relativeTimeSec: meta.relativeTimeSec ?? null,
       sourceFileKey: meta.sourceFileKey ?? null,
+      audioId: meta.audioId ?? null,
     };
   }
 
@@ -499,6 +513,7 @@ export class App {
   resetTranscriptStorage() {
     clearTranscriptStorage();
     this.clearFileCheckpoint();
+    clearTranscriptAudioStorage();
     this.transcriptItems = [];
     this.lastFinalText = '';
     this.lapCount = 0;
@@ -509,7 +524,29 @@ export class App {
     this.ui.setTranscriptItems([]);
     this.ui.setPartial('');
     this.ui.setPipelineStatus('');
+    this.resetTranscriptAudioPlayer();
     this.ui.addLog('Transcript storage cleared.');
+  }
+
+  async playTranscriptAudio(audioId) {
+    if (!audioId) return;
+    const blob = await loadTranscriptAudio(audioId);
+    if (!(blob instanceof Blob)) {
+      this.ui.addLog('Audio segment not found in storage.');
+      return;
+    }
+    this.resetTranscriptAudioPlayer();
+    this.currentTranscriptAudioUrl = URL.createObjectURL(blob);
+    this.ui.setTranscriptAudioSource(this.currentTranscriptAudioUrl);
+    await this.ui.playTranscriptAudio();
+  }
+
+  resetTranscriptAudioPlayer() {
+    if (this.currentTranscriptAudioUrl) {
+      URL.revokeObjectURL(this.currentTranscriptAudioUrl);
+      this.currentTranscriptAudioUrl = '';
+    }
+    this.ui.setTranscriptAudioSource('');
   }
 
   updatePipelineStatus() {
