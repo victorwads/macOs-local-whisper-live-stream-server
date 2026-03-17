@@ -21,11 +21,14 @@ export class App {
   pendingFinalSegments: number;
   audioFileProcessor: any;
   processingMode: "idle" | "mic" | "file";
+  fileCheckpointStorageKey: string;
+  currentFileKey: string | null;
   fileCurrentAudioMs: number;
   fileTotalDurationSec: number;
   fileSpeechStartedAtAudioMs: number;
   fileNextPartialAtAudioMs: number;
   fileTranscriptOffsetSec: number | null;
+  fileCheckpointLastSavedSec: number;
   pendingSegmentMetaQueue: Array<{ startSec: number | null; endSec: number | null; durationSec: number }>;
   silenceStartedAtMs: number;
   silenceUiTicker: number | null;
@@ -44,12 +47,18 @@ export class App {
       audioDurationSec?: number | null;
       partialsSent?: number | null;
       relativeTimeSec?: number | null;
+      sourceFileKey?: string | null;
     }
   ): TranscriptItem;
   pushTranscriptItem(item: TranscriptItem): void;
   generateLapId(): string;
   parseLapVoiceCommand(finalText: string): { matched: boolean; name: string };
   parseCopyVoiceCommand(finalText: string): { matched: boolean };
+  buildFileKey(file: File): string;
+  loadFileCheckpoint(): any;
+  saveFileCheckpoint(data: any): void;
+  clearFileCheckpoint(): void;
+  getResumePointFromTranscripts(fileKey: string): number;
   extractProcessingTimeMs(stats: any): number | null;
   extractAudioDurationSec(stats: any): number | null;
   updatePipelineStatus(): void;

@@ -36,11 +36,14 @@ export class App {
     this.pendingFinalSegments = 0;
     this.audioFileProcessor = new AudioFileProcessor({ targetSampleRate: 16000, speed: 10, chunkSize: 8192 });
     this.processingMode = 'idle'; // idle | mic | file
+    this.fileCheckpointStorageKey = 'whisper:file-process:checkpoint:v1';
+    this.currentFileKey = null;
     this.fileCurrentAudioMs = 0;
     this.fileTotalDurationSec = 0;
     this.fileSpeechStartedAtAudioMs = 0;
     this.fileNextPartialAtAudioMs = 0;
     this.fileTranscriptOffsetSec = null;
+    this.fileCheckpointLastSavedSec = -1;
     this.pendingSegmentMetaQueue = [];
     this.silenceStartedAtMs = 0;
     this.silenceUiTicker = null;
@@ -273,7 +276,16 @@ export class App {
           audioDurationSec,
           partialsSent: partialsCountForFinal,
           relativeTimeSec,
+          sourceFileKey: this.processingMode === 'file' ? this.currentFileKey : null,
         }));
+        if (this.processingMode === 'file' && this.currentFileKey && Number.isFinite(this.fileTranscriptOffsetSec)) {
+          this.saveFileCheckpoint({
+            fileKey: this.currentFileKey,
+            offsetSec: this.fileTranscriptOffsetSec,
+            totalDurationSec: this.fileTotalDurationSec,
+            updatedAt: Date.now(),
+          });
+        }
         if (lapVoice.matched) {
           this.ui.addLog(`Voice Lap command detected: "${data.final}"`);
           this.addLapMarker(lapVoice.name);
@@ -326,6 +338,7 @@ export class App {
       audioDurationSec: meta.audioDurationSec ?? null,
       partialsSent: meta.partialsSent ?? null,
       relativeTimeSec: meta.relativeTimeSec ?? null,
+      sourceFileKey: meta.sourceFileKey ?? null,
     };
   }
 
@@ -391,14 +404,69 @@ export class App {
     return rawName.replace(/^[:\-–—,\s]+/, '').trim();
   }
 
+  buildFileKey(file) {
+    if (!file) return '';
+    const name = (file.name || '').trim().toLowerCase();
+    const size = Number(file.size) || 0;
+    const lastModified = Number(file.lastModified) || 0;
+    return `${name}|${size}|${lastModified}`;
+  }
+
+  loadFileCheckpoint() {
+    try {
+      const raw = localStorage.getItem(this.fileCheckpointStorageKey);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return null;
+      if (typeof parsed.fileKey !== 'string') return null;
+      return parsed;
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  saveFileCheckpoint(data) {
+    try {
+      localStorage.setItem(this.fileCheckpointStorageKey, JSON.stringify(data));
+    } catch (_err) {
+      // ignore storage quota failures
+    }
+  }
+
+  clearFileCheckpoint() {
+    try {
+      localStorage.removeItem(this.fileCheckpointStorageKey);
+    } catch (_err) {
+      // ignore
+    }
+  }
+
+  getResumePointFromTranscripts(fileKey) {
+    if (!fileKey) return 0;
+    let maxEndSec = 0;
+    for (const item of this.transcriptItems) {
+      if (item?.type !== 'final') continue;
+      if (item?.sourceFileKey !== fileKey) continue;
+      if (!Number.isFinite(item?.relativeTimeSec)) continue;
+      if (!Number.isFinite(item?.audioDurationSec)) continue;
+      const endSec = Number(item.relativeTimeSec) + Number(item.audioDurationSec);
+      if (Number.isFinite(endSec) && endSec > maxEndSec) {
+        maxEndSec = endSec;
+      }
+    }
+    return maxEndSec;
+  }
+
   resetTranscriptStorage() {
     clearTranscriptStorage();
+    this.clearFileCheckpoint();
     this.transcriptItems = [];
     this.lastFinalText = '';
     this.lapCount = 0;
     this.currentLapId = this.generateLapId();
     this.pendingFinalSegments = 0;
     this.pendingSegmentMetaQueue = [];
+    this.currentFileKey = null;
     this.ui.setTranscriptItems([]);
     this.ui.setPartial('');
     this.ui.setPipelineStatus('');
@@ -509,16 +577,26 @@ export class App {
       this.stopStreaming();
     }
 
+    const fileKey = this.buildFileKey(file);
+    const checkpoint = this.loadFileCheckpoint();
+    const checkpointResumeSec = checkpoint?.fileKey === fileKey && Number.isFinite(checkpoint?.offsetSec)
+      ? Number(checkpoint.offsetSec)
+      : 0;
+    const transcriptResumeSec = this.getResumePointFromTranscripts(fileKey);
+    const resumeAtSec = Math.max(0, Math.max(checkpointResumeSec, transcriptResumeSec));
+
     this.streamingActive = true;
     this.processingMode = 'file';
+    this.currentFileKey = fileKey;
     this.partialsSinceLastFinal = 0;
     this.pendingFinalSegments = 0;
     this.pendingSegmentMetaQueue = [];
-    this.fileCurrentAudioMs = 0;
+    this.fileCurrentAudioMs = resumeAtSec * 1000;
     this.fileTotalDurationSec = 0;
-    this.fileSpeechStartedAtAudioMs = 0;
+    this.fileSpeechStartedAtAudioMs = resumeAtSec * 1000;
     this.fileNextPartialAtAudioMs = 0;
-    this.fileTranscriptOffsetSec = 0;
+    this.fileTranscriptOffsetSec = resumeAtSec;
+    this.fileCheckpointLastSavedSec = Math.floor(resumeAtSec);
 
     if (typeof this.audioState.resetRuntimeState === 'function') {
       this.audioState.resetRuntimeState(0);
@@ -560,15 +638,23 @@ export class App {
       this.backend.setParams(this.buildBackendParams('file'));
       this.backend.selectModel(this.config.get('model'));
 
+      this.ui.setFileProgress(0, 0, true, 'Decoding file');
       const result = await this.audioFileProcessor.processFile(file, {
-        onStart: ({ durationSec }) => {
+        onStart: ({ durationSec, startAtSec }) => {
           this.fileTotalDurationSec = durationSec;
-          this.ui.setFileProgress(0, durationSec, true);
+          if (startAtSec >= durationSec - 0.01) {
+            this.ui.addLog('File already fully processed. Nothing new to transcribe.');
+            this.clearFileCheckpoint();
+          }
+          this.ui.setFileProgress(startAtSec, durationSec, true, 'Transcribing file');
+          if (startAtSec > 0) {
+            this.ui.addLog(`Resuming file from ${this.ui.formatRelativeTime(startAtSec)}.`);
+          }
         },
         onStatus: (status) => this.ui.setStatus(status),
         onLog: (message) => this.ui.addLog(message),
         onChunk: (chunk, sampleRate, meta) => this.handleIncomingAudioChunk(chunk, sampleRate, meta),
-      });
+      }, { startAtSec: resumeAtSec });
 
       // Finalize remaining buffered speech from file stream.
       this.segmenter.stopSegment();
@@ -576,8 +662,19 @@ export class App {
 
       if (result.aborted) {
         this.ui.addLog('File processing interrupted.');
+        if (this.currentFileKey && Number.isFinite(result.finalAudioSec)) {
+          this.saveFileCheckpoint({
+            fileKey: this.currentFileKey,
+            offsetSec: Number(result.finalAudioSec),
+            totalDurationSec: this.fileTotalDurationSec,
+            updatedAt: Date.now(),
+          });
+        }
       } else {
         this.ui.addLog('File feeding completed. Waiting for pending transcriptions...');
+        if (Number.isFinite(result.finalAudioSec) && Number.isFinite(result.durationSec) && result.finalAudioSec >= result.durationSec - 0.01) {
+          this.clearFileCheckpoint();
+        }
       }
     } catch (err) {
       this.ui.setStatus(`File processing error: ${err.message}`);
@@ -588,6 +685,7 @@ export class App {
       this.segmenter.updateConfig('minSilence', originalMinSilence);
       this.streamingActive = false;
       this.processingMode = 'idle';
+      this.currentFileKey = null;
       this.ui.setFileProgress(0, 0, false);
       this.stopPartialScheduler();
       this.updatePipelineStatus();
@@ -598,7 +696,18 @@ export class App {
     if (meta && Number.isFinite(meta.audioTimeMs)) {
       this.fileCurrentAudioMs = Number(meta.audioTimeMs);
       if (this.processingMode === 'file') {
-        this.ui.setFileProgress(this.fileCurrentAudioMs / 1000, this.fileTotalDurationSec, true);
+        const currentSec = this.fileCurrentAudioMs / 1000;
+        this.ui.setFileProgress(currentSec, this.fileTotalDurationSec, true, 'Transcribing file');
+        const roundedSec = Math.floor(currentSec);
+        if (this.currentFileKey && roundedSec >= this.fileCheckpointLastSavedSec + 1) {
+          this.fileCheckpointLastSavedSec = roundedSec;
+          this.saveFileCheckpoint({
+            fileKey: this.currentFileKey,
+            offsetSec: currentSec,
+            totalDurationSec: this.fileTotalDurationSec,
+            updatedAt: Date.now(),
+          });
+        }
       }
     }
 
@@ -762,6 +871,14 @@ export class App {
   }
 
   stopStreaming() {
+    if (this.processingMode === 'file' && this.currentFileKey && Number.isFinite(this.fileCurrentAudioMs)) {
+      this.saveFileCheckpoint({
+        fileKey: this.currentFileKey,
+        offsetSec: this.fileCurrentAudioMs / 1000,
+        totalDurationSec: this.fileTotalDurationSec,
+        updatedAt: Date.now(),
+      });
+    }
     if (this.audioFileProcessor.isActive) {
       this.audioFileProcessor.stop();
     }
@@ -770,10 +887,13 @@ export class App {
     this.partialsSinceLastFinal = 0;
     this.pendingFinalSegments = 0;
     this.pendingSegmentMetaQueue = [];
+    this.currentFileKey = null;
     this.fileCurrentAudioMs = 0;
     this.fileTotalDurationSec = 0;
     this.fileSpeechStartedAtAudioMs = 0;
     this.fileNextPartialAtAudioMs = 0;
+    this.fileTranscriptOffsetSec = null;
+    this.fileCheckpointLastSavedSec = -1;
     this.stopPartialScheduler();
     if (this.pendingSilenceCommitTimer !== null) {
       clearTimeout(this.pendingSilenceCommitTimer);

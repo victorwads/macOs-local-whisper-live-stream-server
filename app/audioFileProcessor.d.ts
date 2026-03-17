@@ -1,5 +1,5 @@
 export interface AudioFileProcessorHandlers {
-  onStart?: (meta: { durationSec: number }) => void;
+  onStart?: (meta: { durationSec: number; startAtSec: number }) => void;
   onStatus?: (status: string) => void;
   onLog?: (message: string) => void;
   onChunk?: (
@@ -13,6 +13,8 @@ export interface AudioFileProcessorResult {
   aborted: boolean;
   completed: boolean;
   durationSec: number;
+  finalAudioSec?: number;
+  startAtSec?: number;
 }
 
 export interface AudioFileProcessorOptions {
@@ -30,7 +32,7 @@ export class AudioFileProcessor {
   get isActive(): boolean;
   setSpeed(speed: number): void;
   stop(): void;
-  processFile(file: File, handlers?: AudioFileProcessorHandlers): Promise<AudioFileProcessorResult>;
+  processFile(file: File, handlers?: AudioFileProcessorHandlers, options?: { startAtSec?: number }): Promise<AudioFileProcessorResult>;
   decodeAudioFileToTarget(file: File): Promise<Float32Array>;
   toMono(audioBuffer: AudioBuffer): Float32Array;
   resampleLinear(input: Float32Array, inRate: number, outRate: number): Float32Array;

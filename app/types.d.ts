@@ -12,4 +12,5 @@ export interface TranscriptItem {
   audioDurationSec?: number | null;
   partialsSent?: number | null;
   relativeTimeSec?: number | null;
+  sourceFileKey?: string | null;
 }

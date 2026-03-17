@@ -19,7 +19,7 @@ export class AudioFileProcessor {
     this.abortRequested = true;
   }
 
-  async processFile(file, handlers = {}) {
+  async processFile(file, handlers = {}, options = {}) {
     if (!file) return { aborted: false, completed: false, durationSec: 0 };
     if (this.active) {
       throw new Error('File processing is already running.');
@@ -36,16 +36,21 @@ export class AudioFileProcessor {
       }
 
       const durationSec = audioData.length / this.targetSampleRate;
-      handlers.onStart?.({ durationSec });
+      const requestedStartSec = Number(options.startAtSec) || 0;
+      const clampedStartSec = Math.max(0, Math.min(requestedStartSec, durationSec));
+      const startSample = Math.max(0, Math.min(audioData.length, Math.floor(clampedStartSec * this.targetSampleRate)));
+      const streamData = audioData.subarray(startSample);
+
+      handlers.onStart?.({ durationSec, startAtSec: clampedStartSec });
       handlers.onLog?.(
         `Processing file ${file.name} (${durationSec.toFixed(2)}s) at ~${this.speed}x speed`
       );
 
-      let audioTimeMs = 0;
-      for (let i = 0; i < audioData.length; i += this.chunkSize) {
+      let audioTimeMs = clampedStartSec * 1000;
+      for (let i = 0; i < streamData.length; i += this.chunkSize) {
         if (this.abortRequested) break;
 
-        const chunk = audioData.subarray(i, Math.min(i + this.chunkSize, audioData.length));
+        const chunk = streamData.subarray(i, Math.min(i + this.chunkSize, streamData.length));
         const chunkMs = (chunk.length / this.targetSampleRate) * 1000;
         audioTimeMs += chunkMs;
         handlers.onChunk?.(chunk, this.targetSampleRate, {
@@ -63,6 +68,8 @@ export class AudioFileProcessor {
         aborted: this.abortRequested,
         completed: !this.abortRequested,
         durationSec,
+        finalAudioSec: audioTimeMs / 1000,
+        startAtSec: clampedStartSec,
       };
     } finally {
       this.active = false;

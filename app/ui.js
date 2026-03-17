@@ -44,6 +44,7 @@ export class UIManager {
       partialTranscript: document.getElementById('partialTranscript'),
       pipelineStatus: document.getElementById('pipelineStatus'),
       fileProgress: document.getElementById('fileProgress'),
+      fileProgressLabel: document.getElementById('fileProgressLabel'),
       fileProgressFill: document.getElementById('fileProgressFill'),
       fileProgressTime: document.getElementById('fileProgressTime'),
     };
@@ -410,22 +411,35 @@ export class UIManager {
     this.dom.pipelineStatus.textContent = text || '';
   }
 
-  setFileProgress(currentSec, totalSec, active = false) {
+  setFileProgress(currentSec, totalSec, active = false, modeLabel = 'Processing File') {
     const wrapper = this.dom.fileProgress;
+    const mode = this.dom.fileProgressLabel;
     const fill = this.dom.fileProgressFill;
     const label = this.dom.fileProgressTime;
     if (!wrapper || !fill || !label) return;
 
-    if (!active || !Number.isFinite(totalSec) || totalSec <= 0) {
+    if (!active) {
       wrapper.classList.add('hidden');
+      fill.classList.remove('file-progress-fill-indeterminate');
       fill.style.width = '0%';
+      if (mode) mode.textContent = 'Processing File';
       label.textContent = '00:00.0 / 00:00.0';
+      return;
+    }
+
+    wrapper.classList.remove('hidden');
+    if (mode) mode.textContent = modeLabel || 'Processing File';
+
+    if (!Number.isFinite(totalSec) || totalSec <= 0) {
+      fill.classList.add('file-progress-fill-indeterminate');
+      fill.style.width = '100%';
+      label.textContent = modeLabel === 'Decoding file' ? 'Preparing audio...' : 'Waiting...';
       return;
     }
 
     const current = Math.max(0, Math.min(Number(currentSec) || 0, totalSec));
     const pct = Math.max(0, Math.min(100, (current / totalSec) * 100));
-    wrapper.classList.remove('hidden');
+    fill.classList.remove('file-progress-fill-indeterminate');
     fill.style.width = `${pct.toFixed(2)}%`;
     label.textContent = `${this.formatRelativeTime(current)} / ${this.formatRelativeTime(totalSec)}`;
   }
