@@ -6,6 +6,12 @@ import {
   WhisperCppWasmBackend,
   type BackendId
 } from "./features/backends";
+import { SessionViewerComponent } from "./features/session-viewer";
+import {
+  IndexedDbTranscriptionSegmentsRepository,
+  IndexedDbTranscriptionSessionsRepository,
+  IndexedDbTranscriptionSubjectsRepository
+} from "./features/sessions";
 import {
   LocalStorageModelConfigsRepository,
   ModelConfigsComponent
@@ -22,6 +28,7 @@ function parseBackendId(value: string): BackendId {
 export class AppController {
   public readonly binders: AppLayoutBinder;
   public readonly modelConfigsComponent: ModelConfigsComponent;
+  public readonly sessionViewerComponent: SessionViewerComponent;
   public readonly modelsCatalog: ModelsCatalog;
 
   public constructor(root: HTMLElement) {
@@ -38,10 +45,18 @@ export class AppController {
       this.binders.controls.modelConfigs,
       modelConfigsRepository
     );
+
+    this.sessionViewerComponent = new SessionViewerComponent(
+      this.binders.liveTranscriptions,
+      new IndexedDbTranscriptionSessionsRepository(),
+      new IndexedDbTranscriptionSubjectsRepository(),
+      new IndexedDbTranscriptionSegmentsRepository()
+    );
   }
 
   public async initialize(): Promise<void> {
     this.modelConfigsComponent.initialize();
+    await this.sessionViewerComponent.initialize();
     await this.refreshModelList();
     this.bindBackendModelSource();
   }

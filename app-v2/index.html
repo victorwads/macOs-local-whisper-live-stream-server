@@ -10,6 +10,61 @@
   <div id="appRoot" class="container">
     <h1>Live Whisper Transcription</h1>
 
+    <!-- Transcription Area -->
+    <div class="card transcript-section live-transcriptions-root">
+      <div class="card-header card-header-row">
+        <span>Live Transcription</span>
+        <div class="card-header-actions">
+          <label class="toggle-chip" title="Automatically keep the transcript scrolled to the bottom">
+            <input class="js-auto-scroll-toggle" type="checkbox" checked>
+            <span>Auto-scroll</span>
+          </label>
+          <button type="button" class="link-btn js-export-txt-btn">Export TXT</button>
+          <button type="button" class="link-btn js-copy-last-subject-btn" aria-keyshortcuts="Control+C Meta+C">Copy Last Subject <span class="shortcut-hint">Cmd/Ctrl+C</span></button>
+        </div>
+      </div>
+      <div class="file-progress hidden js-file-progress" aria-live="polite">
+        <div class="file-progress-top">
+          <span class="file-progress-label js-file-progress-label">Processing File</span>
+          <span class="file-progress-time js-file-progress-time">00:00.0 / 00:00.0</span>
+        </div>
+        <div class="file-progress-track">
+          <div class="file-progress-fill js-file-progress-fill"></div>
+        </div>
+      </div>
+      <div class="transcript-player-shell js-player-root">
+        <div class="transcript-player-label js-player-label">Segment Audio</div>
+        <audio class="transcript-audio-player js-transcript-audio-player" controls preload="metadata"></audio>
+      </div>
+      <div class="transcript-container js-transcription-box-root" tabindex="0" aria-label="Transcription area (Cmd/Ctrl+C copies last subject)">
+        <div class="transcript-final js-final-transcript"></div>
+        <div class="transcript-partial js-partial-transcript"></div>
+        <div class="pipeline-status js-pipeline-status"></div>
+      </div>
+      <div class="transcript-legend" aria-label="Transcript metadata legend">
+        <span class="legend-item">
+          <span class="legend-dot legend-dot-audio" aria-hidden="true"></span>
+          Audio duration
+        </span>
+        <span class="legend-item">
+          <span class="legend-dot legend-dot-processing" aria-hidden="true"></span>
+          Final processing time
+        </span>
+        <span class="legend-item">
+          <span class="legend-dot legend-dot-rate" aria-hidden="true"></span>
+          Transcribe rate (audio duration / final processing time)
+        </span>
+        <span class="legend-item">
+          <span class="legend-dot legend-dot-wordtime" aria-hidden="true"></span>
+          Avg time per word (ms)
+        </span>
+        <span class="legend-item">
+          <span class="legend-dot legend-dot-partials" aria-hidden="true"></span>
+          Segments count
+        </span>
+      </div>
+    </div>
+
     <div class="card controls-root">
       <div class="button-group controls-actions">
         <button class="js-control-start" type="button" aria-keyshortcuts="Shift+S"><i class="fa-solid fa-microphone"></i> Start Mic <span class="shortcut-hint">Shift+S</span></button>
@@ -165,61 +220,6 @@
           </div>
           <div class="js-status-text">Idle.</div>
         </details>
-      </div>
-    </div>
-
-    <!-- Transcription Area -->
-    <div class="card transcript-section live-transcriptions-root">
-      <div class="card-header card-header-row">
-        <span>Live Transcription</span>
-        <div class="card-header-actions">
-          <label class="toggle-chip" title="Automatically keep the transcript scrolled to the bottom">
-            <input class="js-auto-scroll-toggle" type="checkbox" checked>
-            <span>Auto-scroll</span>
-          </label>
-          <button type="button" class="link-btn js-export-txt-btn">Export TXT</button>
-          <button type="button" class="link-btn js-copy-last-subject-btn" aria-keyshortcuts="Control+C Meta+C">Copy Last Subject <span class="shortcut-hint">Cmd/Ctrl+C</span></button>
-        </div>
-      </div>
-      <div class="file-progress hidden js-file-progress" aria-live="polite">
-        <div class="file-progress-top">
-          <span class="file-progress-label js-file-progress-label">Processing File</span>
-          <span class="file-progress-time js-file-progress-time">00:00.0 / 00:00.0</span>
-        </div>
-        <div class="file-progress-track">
-          <div class="file-progress-fill js-file-progress-fill"></div>
-        </div>
-      </div>
-      <div class="transcript-player-shell js-player-root">
-        <div class="transcript-player-label js-player-label">Segment Audio</div>
-        <audio class="transcript-audio-player js-transcript-audio-player" controls preload="metadata"></audio>
-      </div>
-      <div class="transcript-container js-transcription-box-root" tabindex="0" aria-label="Transcription area (Cmd/Ctrl+C copies last subject)">
-        <div class="transcript-final js-final-transcript"></div>
-        <div class="transcript-partial js-partial-transcript"></div>
-        <div class="pipeline-status js-pipeline-status"></div>
-      </div>
-      <div class="transcript-legend" aria-label="Transcript metadata legend">
-        <span class="legend-item">
-          <span class="legend-dot legend-dot-audio" aria-hidden="true"></span>
-          Audio duration
-        </span>
-        <span class="legend-item">
-          <span class="legend-dot legend-dot-processing" aria-hidden="true"></span>
-          Final processing time
-        </span>
-        <span class="legend-item">
-          <span class="legend-dot legend-dot-rate" aria-hidden="true"></span>
-          Transcribe rate (audio duration / final processing time)
-        </span>
-        <span class="legend-item">
-          <span class="legend-dot legend-dot-wordtime" aria-hidden="true"></span>
-          Avg time per word (ms)
-        </span>
-        <span class="legend-item">
-          <span class="legend-dot legend-dot-partials" aria-hidden="true"></span>
-          Segments count
-        </span>
       </div>
     </div>
 

@@ -2,7 +2,7 @@ services:
   app-v2:
     image: node:20-alpine
     working_dir: /workspace/app-v2
-    command: sh -c "npm install && npm run dev"
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 4173"
     ports:
       - "4173:4173"
     volumes:
