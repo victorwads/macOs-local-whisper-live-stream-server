@@ -7,94 +7,94 @@
 </head>
 <body>
 
-  <div class="container">
+  <div id="appRoot" class="container">
     <h1>Live Whisper Transcription</h1>
 
-    <div class="card">
-      <div class="button-group">
-        <button id="startBtn" type="button" aria-keyshortcuts="Shift+S"><i class="fa-solid fa-microphone"></i> Start Mic <span class="shortcut-hint">Shift+S</span></button>
-        <button id="processFileBtn" type="button">Process File</button>
-        <input id="audioFileInput" type="file" accept=".mp3,.wav,.m4a,.aac,.ogg,audio/*" style="display:none">
-        <button id="lapBtn" type="button" aria-keyshortcuts="Shift+L">New Subject <span class="shortcut-hint">Shift+L</span></button>
-        <button id="stopBtn" type="button" aria-keyshortcuts="Shift+X">Stop <span class="shortcut-hint">Shift+X</span></button>
+    <div class="card controls-root">
+      <div class="button-group controls-actions">
+        <button class="js-control-start" type="button" aria-keyshortcuts="Shift+S"><i class="fa-solid fa-microphone"></i> Start Mic <span class="shortcut-hint">Shift+S</span></button>
+        <button class="js-control-process-file" type="button">Process File</button>
+        <input class="js-control-audio-file-input" type="file" accept=".mp3,.wav,.m4a,.aac,.ogg,audio/*" style="display:none">
+        <button class="js-control-new-subject" type="button" aria-keyshortcuts="Shift+L">New Subject <span class="shortcut-hint">Shift+L</span></button>
+        <button class="js-control-stop" type="button" aria-keyshortcuts="Shift+X">Stop <span class="shortcut-hint">Shift+X</span></button>
       </div>
 
       <div class="control-sections">
-        <details class="config-box config-family config-collapsible">
+        <details class="config-box config-family config-collapsible js-model-configs">
           <summary class="config-box-header">
             <span class="scope-chip scope-family">Família</span>
             <h2 class="config-box-title">Configurações do Modelo</h2>
           </summary>
           <div class="controls-grid">
             <div class="control-group">
-              <label for="modelSelect" title="Select the Whisper model size. Larger models are more accurate but slower.">Model</label>
-              <select id="modelSelect"></select>
+              <label title="Select the Whisper model size. Larger models are more accurate but slower.">Model</label>
+              <select class="js-model-select"></select>
             </div>
             <div class="control-group">
-              <label for="thresholdInput" title="Minimum audio level required to detect speech. If background noise is triggering capture when you are not speaking, increase this value.">Silence Threshold</label>
-              <input id="thresholdInput" type="number" step="0.0001" min="0" value="0.0015">
+              <label title="Minimum audio level required to detect speech. If background noise is triggering capture when you are not speaking, increase this value.">Silence Threshold</label>
+              <input class="js-threshold-input" type="number" step="0.0001" min="0" value="0.0015">
             </div>
             <div class="control-group">
-              <label for="minSilenceInput" title="Minimum silence duration required to finalize (split) the current audio segment. Higher values keep more context and can improve punctuation/language detection, but increase latency and segment size.">Min Silence (ms)</label>
-              <input id="minSilenceInput" type="number" step="100" min="0" value="1000">
+              <label title="Minimum silence duration required to finalize (split) the current audio segment. Higher values keep more context and can improve punctuation/language detection, but increase latency and segment size.">Min Silence (ms)</label>
+              <input class="js-min-silence-input" type="number" step="100" min="0" value="1000">
             </div>
             <div class="control-group">
-              <label for="minSpeakInput" title="Minimum speech duration required before attempting transcription. Helps capture short utterances (like 'oh' or 'hi') without reacting to ultra-short noise.">Min Speak (ms)</label>
-              <input id="minSpeakInput" type="number" step="50" min="0" value="200">
+              <label title="Minimum speech duration required before attempting transcription. Helps capture short utterances (like 'oh' or 'hi') without reacting to ultra-short noise.">Min Speak (ms)</label>
+              <input class="js-min-speak-input" type="number" step="50" min="0" value="200">
             </div>
             <div class="control-group">
-              <label for="maxSecondsInput" title="Maximum segment duration before forcing transcription. Higher values keep more context (and cost more). Lower values reduce cost, but increase the risk of splitting context mid-sentence.">Max Audio (s)</label>
-              <input id="maxSecondsInput" type="number" step="0.5" min="1" value="10">
+              <label title="Maximum segment duration before forcing transcription. Higher values keep more context (and cost more). Lower values reduce cost, but increase the risk of splitting context mid-sentence.">Max Audio (s)</label>
+              <input class="js-max-seconds-input" type="number" step="0.5" min="1" value="10">
             </div>
             <div class="control-group">
-              <label for="partialIntervalMinInput" title="Initial interval between partial transcriptions. Lower values feel more real-time, but increase GPU/CPU usage.">Partial Interval Min (ms)</label>
-              <input type="number" id="partialIntervalMinInput" step="100" min="0" value="300">
+              <label title="Initial interval between partial transcriptions. Lower values feel more real-time, but increase GPU/CPU usage.">Partial Interval Min (ms)</label>
+              <input type="number" class="js-partial-interval-min-input" step="100" min="0" value="300">
             </div>
             <div class="control-group">
-              <label for="partialIntervalMaxInput" title="Maximum interval for partials as the segment grows (adaptive mode). It is often close to Max Audio in milliseconds, but you can tune it for your latency/cost target.">Partial Interval Max (ms)</label>
-              <input type="number" id="partialIntervalMaxInput" step="100" min="0" value="1500">
+              <label title="Maximum interval for partials as the segment grows (adaptive mode). It is often close to Max Audio in milliseconds, but you can tune it for your latency/cost target.">Partial Interval Max (ms)</label>
+              <input type="number" class="js-partial-interval-max-input" step="100" min="0" value="1500">
             </div>
           </div>
         </details>
 
-        <details class="config-box config-global config-collapsible">
+        <details class="config-box config-global config-collapsible js-global-configs">
           <summary class="config-box-header">
             <span class="scope-chip scope-global">Global</span>
             <h2 class="config-box-title">Configurações Globais</h2>
           </summary>
           <div class="controls-grid">
             <div class="control-group">
-              <label for="languageInput" title="Language code for transcription (e.g., 'en', 'pt', 'auto'). Full names like 'portuguese' are also supported.">
-                Language <span id="loadedLang" style="margin-left: 8px; font-size: 0.9em; color: #666;"></span>
+              <label title="Language code for transcription (e.g., 'en', 'pt', 'auto'). Full names like 'portuguese' are also supported.">
+                Language <span class="js-loaded-lang" style="margin-left: 8px; font-size: 0.9em; color: #666;"></span>
               </label>
-              <input type="text" id="languageInput" value="auto" placeholder="auto">
+              <input type="text" class="js-language-input" value="auto" placeholder="auto">
             </div>
             <div class="control-group">
-              <label for="lapVoicePhraseInput" title="Final transcription phrase used to create a new Subject marker by voice command. Matching is case-insensitive.">Subject Voice Phrase</label>
-              <input type="text" id="lapVoicePhraseInput" value="new subject" placeholder="e.g. new subject">
+              <label title="Final transcription phrase used to create a new Subject marker by voice command. Matching is case-insensitive.">Subject Voice Phrase</label>
+              <input type="text" class="js-subject-voice-phrase-input" value="new subject" placeholder="e.g. new subject">
             </div>
             <div class="control-group">
-              <label for="lapVoiceMatchModeInput" title="How to match the phrase in final transcriptions: contains or starts with. Matching is case-insensitive.">Subject Voice Match</label>
-              <select id="lapVoiceMatchModeInput">
+              <label title="How to match the phrase in final transcriptions: contains or starts with. Matching is case-insensitive.">Subject Voice Match</label>
+              <select class="js-subject-voice-match-mode-input">
                 <option value="contains">contains</option>
                 <option value="starts_with">starts with</option>
               </select>
             </div>
             <div class="control-group">
-              <label for="copyVoicePhraseInput" title="If a final transcription starts with this phrase, the app copies the last subject and does not save this command in history. Matching is case-insensitive and always starts with.">Copy Voice Phrase</label>
-              <input type="text" id="copyVoicePhraseInput" value="copy last subject" placeholder="e.g. copy last subject">
+              <label title="If a final transcription starts with this phrase, the app copies the last subject and does not save this command in history. Matching is case-insensitive and always starts with.">Copy Voice Phrase</label>
+              <input type="text" class="js-copy-voice-phrase-input" value="copy last subject" placeholder="e.g. copy last subject">
             </div>
             <div class="control-group">
               <label>Storage</label>
               <div class="field-button-row">
-                <button id="clearStorageBtn" type="button" class="field-button">Clear Transcriptions History</button>
-                <button id="clearWebGpuDataBtn" type="button" class="field-button">Clear Models Data</button>
-                <button id="clearAudioDataBtn" type="button" class="field-button">Clear Audios Data</button>
+                <button type="button" class="field-button js-clear-storage-btn">Clear Transcriptions History</button>
+                <button type="button" class="field-button js-clear-webgpu-data-btn">Clear Models Data</button>
+                <button type="button" class="field-button js-clear-audio-data-btn">Clear Audios Data</button>
               </div>
             </div>
             <div class="control-group">
-              <label for="backendModeInput" title="Select transcription backend implementation. Python uses local server. WebGPU runs in-browser on GPU. whisper.cpp WASM runs in-browser with WebAssembly.">Backend Implementation</label>
-              <select id="backendModeInput">
+              <label title="Select transcription backend implementation. Python uses local server. WebGPU runs in-browser on GPU. whisper.cpp WASM runs in-browser with WebAssembly.">Backend Implementation</label>
+              <select class="js-backend-mode-input">
                 <option value="python">Python Backend</option>
                 <option value="webgpu">Browser WebGPU (beta)</option>
                 <option value="whispercpp_wasm">Browser WebASM whisper.cpp (beta)</option>
@@ -103,7 +103,7 @@
           </div>
         </details>
 
-        <details class="config-box config-debug config-collapsible">
+        <details class="config-box config-debug config-collapsible js-debug-info">
           <summary class="config-box-header">
             <span class="scope-chip scope-debug">Debug</span>
             <h2 class="config-box-title">Debug Info</h2>
@@ -111,93 +111,93 @@
           <div class="debug-grid">
             <div class="indicators">
               <div class="indicator-item">
-                  <strong>Level:</strong> <span id="levelIndicator">--</span>
+                  <strong>Level:</strong> <span class="js-level-indicator">--</span>
               </div>
               <div class="indicator-item">
-                  <strong>State:</strong> <span id="stateIndicator">idle</span>
+                  <strong>State:</strong> <span class="js-state-indicator">idle</span>
               </div>
               <div class="indicator-item">
-                  <strong>Partial Now:</strong> <span id="partialIntervalCurrentIndicator">--</span>
+                  <strong>Partial Now:</strong> <span class="js-partial-interval-current-indicator">--</span>
               </div>
               <div class="indicator-item">
-                  <strong>Silence:</strong> <span id="silenceDurationIndicator">0 ms</span>
+                  <strong>Silence:</strong> <span class="js-silence-duration-indicator">0 ms</span>
               </div>
               <div class="indicator-item">
-                  <strong>Suggested:</strong> <span id="suggestedIndicator">--</span>
+                  <strong>Suggested:</strong> <span class="js-suggested-indicator">--</span>
               </div>
               <div class="indicator-item">
-                  <span id="modelStatus"></span>
+                  <span class="js-model-status"></span>
               </div>
             </div>
 
             <div class="indicators indicators-audio">
               <div class="indicator-item">
-                <strong>RMS:</strong> <span id="statRms">--</span>
+                <strong>RMS:</strong> <span class="js-stat-rms">--</span>
               </div>
               <div class="indicator-item">
-                <strong>ZCR:</strong> <span id="statZcr">--</span>
+                <strong>ZCR:</strong> <span class="js-stat-zcr">--</span>
               </div>
               <div class="indicator-item">
-                <strong>Noise Floor:</strong> <span id="statNoiseFloor">--</span>
+                <strong>Noise Floor:</strong> <span class="js-stat-noise-floor">--</span>
               </div>
               <div class="indicator-item">
-                <strong>Dyn Thresh:</strong> <span id="statDynamicThreshold">--</span>
+                <strong>Dyn Thresh:</strong> <span class="js-stat-dynamic-threshold">--</span>
               </div>
               <div class="indicator-item">
-                <strong>Speech Score:</strong> <span id="statSpeechScore">--</span>
+                <strong>Speech Score:</strong> <span class="js-stat-speech-score">--</span>
               </div>
               <div class="indicator-item">
-                <strong>Is Speech:</strong> <span id="statIsSpeech">--</span>
+                <strong>Is Speech:</strong> <span class="js-stat-is-speech">--</span>
               </div>
               <div class="indicator-item">
-                <strong>Score (smooth):</strong> <span id="statSmoothedSpeechScore">--</span>
+                <strong>Score (smooth):</strong> <span class="js-stat-smoothed-speech-score">--</span>
               </div>
               <div class="indicator-item">
-                <strong>Voice Band Ratio:</strong> <span id="statVoiceBandRatio">--</span>
+                <strong>Voice Band Ratio:</strong> <span class="js-stat-voice-band-ratio">--</span>
               </div>
               <div class="indicator-item">
-                <strong>Total Spectral Energy:</strong> <span id="statTotalEnergy">--</span>
+                <strong>Total Spectral Energy:</strong> <span class="js-stat-total-energy">--</span>
               </div>
               <div class="indicator-item">
-                <strong>Is Silent:</strong> <span id="statIsSilent">--</span>
+                <strong>Is Silent:</strong> <span class="js-stat-is-silent">--</span>
               </div>
             </div>
           </div>
-          <div id="status">Idle.</div>
+          <div class="js-status-text">Idle.</div>
         </details>
       </div>
     </div>
 
     <!-- Transcription Area -->
-    <div class="card transcript-section">
+    <div class="card transcript-section live-transcriptions-root">
       <div class="card-header card-header-row">
         <span>Live Transcription</span>
         <div class="card-header-actions">
-          <label class="toggle-chip" for="autoScrollToggle" title="Automatically keep the transcript scrolled to the bottom">
-            <input id="autoScrollToggle" type="checkbox" checked>
+          <label class="toggle-chip" title="Automatically keep the transcript scrolled to the bottom">
+            <input class="js-auto-scroll-toggle" type="checkbox" checked>
             <span>Auto-scroll</span>
           </label>
-          <button id="exportTxtBtn" type="button" class="link-btn">Export TXT</button>
-          <button id="copyLastLapBtn" type="button" class="link-btn" aria-keyshortcuts="Control+C Meta+C">Copy Last Subject <span class="shortcut-hint">Cmd/Ctrl+C</span></button>
+          <button type="button" class="link-btn js-export-txt-btn">Export TXT</button>
+          <button type="button" class="link-btn js-copy-last-subject-btn" aria-keyshortcuts="Control+C Meta+C">Copy Last Subject <span class="shortcut-hint">Cmd/Ctrl+C</span></button>
         </div>
       </div>
-      <div id="fileProgress" class="file-progress hidden" aria-live="polite">
+      <div class="file-progress hidden js-file-progress" aria-live="polite">
         <div class="file-progress-top">
-          <span id="fileProgressLabel" class="file-progress-label">Processing File</span>
-          <span id="fileProgressTime" class="file-progress-time">00:00.0 / 00:00.0</span>
+          <span class="file-progress-label js-file-progress-label">Processing File</span>
+          <span class="file-progress-time js-file-progress-time">00:00.0 / 00:00.0</span>
         </div>
         <div class="file-progress-track">
-          <div id="fileProgressFill" class="file-progress-fill"></div>
+          <div class="file-progress-fill js-file-progress-fill"></div>
         </div>
       </div>
-      <div class="transcript-player-shell">
-        <div class="transcript-player-label">Segment Audio</div>
-        <audio id="transcriptAudioPlayer" class="transcript-audio-player" controls preload="metadata"></audio>
+      <div class="transcript-player-shell js-player-root">
+        <div class="transcript-player-label js-player-label">Segment Audio</div>
+        <audio class="transcript-audio-player js-transcript-audio-player" controls preload="metadata"></audio>
       </div>
-      <div id="transcript" class="transcript-container" tabindex="0" aria-label="Transcription area (Cmd/Ctrl+C copies last subject)">
-        <div id="finalTranscript" class="transcript-final"></div>
-        <div id="partialTranscript" class="transcript-partial"></div>
-        <div id="pipelineStatus" class="pipeline-status"></div>
+      <div class="transcript-container js-transcription-box-root" tabindex="0" aria-label="Transcription area (Cmd/Ctrl+C copies last subject)">
+        <div class="transcript-final js-final-transcript"></div>
+        <div class="transcript-partial js-partial-transcript"></div>
+        <div class="pipeline-status js-pipeline-status"></div>
       </div>
       <div class="transcript-legend" aria-label="Transcript metadata legend">
         <span class="legend-item">
@@ -224,10 +224,10 @@
     </div>
 
     <!-- Logs -->
-    <div class="card">
-      <details class="config-collapsible">
+    <div class="card system-logs-root">
+      <details class="config-collapsible js-system-logs-details">
         <summary class="card-header">System Logs</summary>
-        <pre id="log"></pre>
+        <pre class="js-system-log-output"></pre>
       </details>
     </div>
 
