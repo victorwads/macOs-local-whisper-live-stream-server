@@ -13,8 +13,9 @@ from fastapi.staticfiles import StaticFiles
 
 from ws import router as ws_router
 from engine_manager import (
+    clear_downloaded_models_cache,
     DEFAULT_MODEL,
-    available_models,
+    models_cache_size_bytes,
     ensure_engine,
     installed_models,
     installed_models_info,
@@ -92,6 +93,18 @@ async def list_models() -> dict:
         "supported": supported_models(),
         "default": DEFAULT_MODEL,
     }
+
+
+@app.get("/models/cache/size")
+async def models_cache_size() -> dict:
+    return {"size_bytes": models_cache_size_bytes()}
+
+
+@app.post("/models/cache/clear")
+async def clear_models_cache() -> dict:
+    server_manager.stop_all()
+    cleared_bytes = clear_downloaded_models_cache()
+    return {"status": "ok", "cleared_size_bytes": cleared_bytes}
 
 
 @app.post("/transcribe")

@@ -1,4 +1,5 @@
 import type { ModelConfigsBinder } from "../../binders/controls/model-configs-binder";
+import { formatByteSize } from "../../helpers/format-byte-size";
 import type { BackendModelInfo } from "../backends";
 import type { ModelConfigsRepository } from "./repository";
 import {
@@ -30,7 +31,7 @@ export class ModelConfigsComponent {
       return item;
     });
 
-    this.availableModels = normalized;
+    this.availableModels = this.sortModels(normalized);
     this.renderModelOptions();
     this.syncContextAndLoad();
     this.render();
@@ -136,16 +137,65 @@ export class ModelConfigsComponent {
 
     select.innerHTML = "";
 
-    for (const model of this.availableModels) {
-      const option = document.createElement("option");
-      option.value = model.name;
-      option.textContent = model.name;
-      select.appendChild(option);
+    const installedModels = this.availableModels.filter((model) => model.installed);
+    const downloadableModels = this.availableModels.filter((model) => !model.installed);
+
+    if (installedModels.length > 0) {
+      const installedGroup = document.createElement("optgroup");
+      installedGroup.label = "Installed";
+      for (const model of installedModels) {
+        const option = document.createElement("option");
+        option.value = model.name;
+        option.textContent = this.toModelOptionLabel(model);
+        installedGroup.appendChild(option);
+      }
+      select.appendChild(installedGroup);
+    }
+
+    if (downloadableModels.length > 0) {
+      const forDownloadGroup = document.createElement("optgroup");
+      forDownloadGroup.label = "For Download";
+      for (const model of downloadableModels) {
+        const option = document.createElement("option");
+        option.value = model.name;
+        option.textContent = this.toModelOptionLabel(model);
+        forDownloadGroup.appendChild(option);
+      }
+      select.appendChild(forDownloadGroup);
     }
 
     if (previousValue && this.availableModels.some((model) => model.name === previousValue)) {
       select.value = previousValue;
     }
+  }
+
+  private sortModels(models: BackendModelInfo[]): BackendModelInfo[] {
+    return [...models].sort((left, right) => {
+      if (left.installed !== right.installed) {
+        return left.installed ? -1 : 1;
+      }
+
+      if (left.installed && right.installed) {
+        const leftSize = typeof left.sizeBytes === "number" && Number.isFinite(left.sizeBytes)
+          ? left.sizeBytes
+          : Number.POSITIVE_INFINITY;
+        const rightSize = typeof right.sizeBytes === "number" && Number.isFinite(right.sizeBytes)
+          ? right.sizeBytes
+          : Number.POSITIVE_INFINITY;
+
+        if (leftSize !== rightSize) {
+          return leftSize - rightSize;
+        }
+      }
+
+      return left.name.localeCompare(right.name);
+    });
+  }
+
+  private toModelOptionLabel(model: BackendModelInfo): string {
+    const sizeLabel = formatByteSize(model.sizeBytes);
+    const installedLabel = model.installed ? ` (installed, ${sizeLabel})` : "";
+    return `${model.name}${installedLabel}`;
   }
 
   private createContextKey(modelName: string): string {

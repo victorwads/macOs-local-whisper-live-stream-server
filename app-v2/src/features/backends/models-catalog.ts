@@ -23,4 +23,28 @@ export class ModelsCatalog {
     const backend = this.backends[this.activeBackendId];
     return await backend.getModelsList();
   }
+
+  public async getActiveBackendDownloadedModelsCacheSizeBytes(): Promise<number> {
+    const backend = this.backends[this.activeBackendId];
+    return await backend.getDownloadedModelsCacheSizeBytes();
+  }
+
+  public async getAllBackendsDownloadedModelsCacheSizeBytes(): Promise<number> {
+    const sizes = await Promise.all(
+      Object.values(this.backends).map((backend) => backend.getDownloadedModelsCacheSizeBytes())
+    );
+
+    return sizes.reduce((sum, size) => sum + (Number.isFinite(size) ? Math.max(0, size) : 0), 0);
+  }
+
+  public async clearActiveBackendDownloadedModelsCache(): Promise<void> {
+    const backend = this.backends[this.activeBackendId];
+    await backend.clearDownloadedModelsCache();
+  }
+
+  public async clearAllBackendsDownloadedModelsCache(): Promise<void> {
+    await Promise.all(
+      Object.values(this.backends).map((backend) => backend.clearDownloadedModelsCache())
+    );
+  }
 }

@@ -1,4 +1,5 @@
 import os
+import shutil
 from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Optional, Union
@@ -148,3 +149,32 @@ def ensure_engine(model_size: Optional[str] = None, download: bool = True):
             fetch_model(size, backend="faster")
         get_engine.cache_clear()
         return get_engine(size)
+
+
+def models_cache_size_bytes() -> int:
+    models_root = Path(os.getenv("WHISPER_MODELS_DIR") or Path(__file__).resolve().parent / "models")
+    if not models_root.exists():
+        return 0
+
+    return _dir_size_bytes(models_root)
+
+
+def clear_downloaded_models_cache() -> int:
+    models_root = Path(os.getenv("WHISPER_MODELS_DIR") or Path(__file__).resolve().parent / "models")
+    if not models_root.exists():
+        get_engine.cache_clear()
+        return 0
+
+    removed_bytes = models_cache_size_bytes()
+
+    for item in models_root.iterdir():
+        try:
+            if item.is_dir():
+                shutil.rmtree(item, ignore_errors=True)
+            else:
+                item.unlink(missing_ok=True)
+        except OSError:
+            continue
+
+    get_engine.cache_clear()
+    return removed_bytes
