@@ -9,12 +9,14 @@ export class AudioCapture {
     this.sourceNode = null;
     this.onAudioChunk = null; // Callback function
     this.isStreaming = false;
+    this.audioTimeMs = 0;
   }
 
   async start(onAudioChunk) {
     if (this.isStreaming) return;
     
     this.onAudioChunk = onAudioChunk;
+    this.audioTimeMs = 0;
     
     try {
       this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -34,8 +36,13 @@ export class AudioCapture {
         const downsampled = downsampleBuffer(input, this.audioCtx.sampleRate, this.targetRate);
         
         if (downsampled && downsampled.length > 0 && this.onAudioChunk) {
+          const chunkDurationMs = (downsampled.length / this.targetRate) * 1000;
+          this.audioTimeMs += chunkDurationMs;
           // Passamos também o sampleRate efetivo para consumidores
-          this.onAudioChunk(downsampled, this.targetRate);
+          this.onAudioChunk(downsampled, this.targetRate, {
+            audioTimeMs: this.audioTimeMs,
+            chunkDurationMs,
+          });
         }
       };
 
@@ -68,5 +75,6 @@ export class AudioCapture {
     }
     this.isStreaming = false;
     this.onAudioChunk = null;
+    this.audioTimeMs = 0;
   }
 }

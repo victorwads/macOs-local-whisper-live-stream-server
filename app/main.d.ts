@@ -1,5 +1,6 @@
 import type { TranscriptItem } from "./types";
 import type { BackendClient } from "./backendClient";
+import type { AudioClockScheduler } from "./audioClockScheduler";
 
 export class App {
   config: any;
@@ -13,7 +14,6 @@ export class App {
   lastFinalText: string;
   currentLapId: string;
   streamingActive: boolean;
-  partialSchedulerTimer: number | null;
   currentSpeechStartedAt: number;
   lastPartialProcessingMs: number;
   partialIntervalCurrentMs: number;
@@ -34,13 +34,18 @@ export class App {
   pendingSegmentMetaQueue: Array<{ startSec: number | null; endSec: number | null; durationSec: number }>;
   modelLoadUiActive: boolean;
   silenceStartedAtMs: number;
-  silenceUiTicker: number | null;
-  pendingSilenceCommitTimer: number | null;
+  micCurrentAudioMs: number;
+  pendingQueueWaiters: Array<() => void>;
+  audioClock: AudioClockScheduler;
+  silenceCommitTimerId: number | null;
+  partialTimerId: number | null;
+  silenceUiIntervalId: number | null;
   backendConnected: boolean;
   pendingSilenceChunks: Float32Array[];
   pendingSilenceSamples: number;
   pendingSilenceStartSec: number | null;
   pendingSilenceSampleRate: number;
+  hasSpeechSinceLastSilence: boolean;
   constructor();
   init(): void;
   hydrateTranscript(): void;
@@ -92,10 +97,7 @@ export class App {
   startPartialScheduler(): void;
   stopPartialScheduler(): void;
   restartPartialScheduler(): void;
-  scheduleNextPartialTick(delayMs: number): void;
-  handlePartialTick(): void;
   computeAdaptivePartialIntervalMs(elapsedOverrideMs?: number | null): number;
-  maybeTriggerFilePartial(nowAudioMs: number): void;
   handleIncomingAudioChunk(
     chunk: Float32Array,
     sampleRate: number,
@@ -106,6 +108,19 @@ export class App {
     sampleRate: number,
     meta?: { audioTimeMs?: number; chunkDurationMs?: number } | null
   ): { audioTimeMs: number; chunkDurationMs: number };
+  resolveMicChunkTiming(
+    chunk: Float32Array,
+    sampleRate: number,
+    meta?: { audioTimeMs?: number; chunkDurationMs?: number } | null
+  ): { audioTimeMs: number; chunkDurationMs: number };
+  waitForPendingQueueChange(): Promise<void>;
+  notifyPendingQueueWaiters(): void;
+  resetAudioClock(startMs?: number): void;
+  getCurrentAudioMs(): number;
+  clearSilenceCommitTimer(): void;
+  scheduleSilenceCommit(confirmMs: number, triggerDuration?: number, configuredMinSilence?: number): void;
+  startSilenceUiTicker(): void;
+  stopSilenceUiTicker(): void;
   logFileVadEvent(eventName: string, extras?: Record<string, unknown>): void;
   resetPendingSilenceCollector(): void;
   collectPendingSilenceChunk(chunk: Float32Array, sampleRate: number, nowMs: number): void;
