@@ -1,4 +1,5 @@
 import type { ModelConfigsBinder } from "../../binders/controls/model-configs-binder";
+import type { BackendModelInfo } from "../backends";
 import type { ModelConfigsRepository } from "./repository";
 import {
   DEFAULT_MODEL_CONFIGS_STATE,
@@ -7,6 +8,7 @@ import {
 
 export class ModelConfigsComponent {
   private state: ModelConfigsState = { ...DEFAULT_MODEL_CONFIGS_STATE };
+  private availableModels: BackendModelInfo[] = [];
 
   public constructor(
     public readonly binder: ModelConfigsBinder,
@@ -17,6 +19,21 @@ export class ModelConfigsComponent {
     this.syncContextAndLoad();
     this.render();
     this.bindEvents();
+  }
+
+  public setModels(models: BackendModelInfo[] | string[]): void {
+    const normalized: BackendModelInfo[] = models.map((item) => {
+      if (typeof item === "string") {
+        return { name: item, installed: false, sizeBytes: null };
+      }
+
+      return item;
+    });
+
+    this.availableModels = normalized;
+    this.renderModelOptions();
+    this.syncContextAndLoad();
+    this.render();
   }
 
   public getState(): ModelConfigsState {
@@ -79,7 +96,7 @@ export class ModelConfigsComponent {
   }
 
   private syncContextAndLoad(): void {
-    const selectedModel = this.binder.modelSelect.value || this.state.model || "default";
+    const selectedModel = this.resolveSelectedModel();
 
     // TODO(v2): Replace this context strategy when model identity also depends on
     // backend mode and execution mode (e.g. microphone vs process-file).
@@ -95,6 +112,40 @@ export class ModelConfigsComponent {
     };
 
     this.persist();
+  }
+
+  private resolveSelectedModel(): string {
+    if (this.binder.modelSelect.value) {
+      return this.binder.modelSelect.value;
+    }
+
+    if (this.state.model) {
+      return this.state.model;
+    }
+
+    if (this.availableModels.length > 0) {
+      return this.availableModels[0].name;
+    }
+
+    return "default";
+  }
+
+  private renderModelOptions(): void {
+    const select = this.binder.modelSelect;
+    const previousValue = select.value || this.state.model;
+
+    select.innerHTML = "";
+
+    for (const model of this.availableModels) {
+      const option = document.createElement("option");
+      option.value = model.name;
+      option.textContent = model.name;
+      select.appendChild(option);
+    }
+
+    if (previousValue && this.availableModels.some((model) => model.name === previousValue)) {
+      select.value = previousValue;
+    }
   }
 
   private createContextKey(modelName: string): string {
