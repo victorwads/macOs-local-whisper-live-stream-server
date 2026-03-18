@@ -23,7 +23,7 @@ export class ControlsBinder {
     this.newSubjectButton = queryRequired<HTMLButtonElement>(root, ".js-control-new-subject");
     this.stopButton = queryRequired<HTMLButtonElement>(root, ".js-control-stop");
 
-    const modelConfigsRoot = queryRequired<HTMLElement>(root, ".js-model-configs");
+    const modelConfigsRoot = queryRequired<HTMLDetailsElement>(root, ".js-model-configs");
     const globalConfigsRoot = queryRequired<HTMLDetailsElement>(root, ".js-global-configs");
     const debugInfoRoot = queryRequired<HTMLElement>(root, ".js-debug-info");
 

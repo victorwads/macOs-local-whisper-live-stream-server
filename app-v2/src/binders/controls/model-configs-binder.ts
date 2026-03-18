@@ -1,7 +1,7 @@
 import { queryRequired } from "../dom";
 
 export class ModelConfigsBinder {
-  public readonly root: HTMLElement;
+  public readonly root: HTMLDetailsElement;
   public readonly modelSelect: HTMLSelectElement;
   public readonly thresholdInput: HTMLInputElement;
   public readonly minSilenceInput: HTMLInputElement;
@@ -10,7 +10,7 @@ export class ModelConfigsBinder {
   public readonly partialIntervalMinInput: HTMLInputElement;
   public readonly partialIntervalMaxInput: HTMLInputElement;
 
-  public constructor(root: HTMLElement) {
+  public constructor(root: HTMLDetailsElement) {
     this.root = root;
     this.modelSelect = queryRequired<HTMLSelectElement>(root, ".js-model-select");
     this.thresholdInput = queryRequired<HTMLInputElement>(root, ".js-threshold-input");
