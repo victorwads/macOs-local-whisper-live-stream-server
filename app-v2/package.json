@@ -1,0 +1,17 @@
+{
+  "name": "whisper-local-app-v2",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Whisper Local App V2 - Vanilla TS + Vite",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json && vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4173"
+  },
+  "devDependencies": {
+    "@fortawesome/fontawesome-free": "^7.1.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.3"
+  }
+}

@@ -1,0 +1,4 @@
+/* V2 layout-level CSS overrides and future structure */
+.container {
+  min-height: calc(100vh - 48px);
+}
