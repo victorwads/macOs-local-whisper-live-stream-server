@@ -38,17 +38,30 @@
     <div class="card transcript-section live-transcriptions-root hide-details">
       <div class="card-header card-header-row">
         <span>Live Transcription</span>
-        <div class="card-header-actions">
-          <label class="toggle-chip" title="Automatically keep the transcript scrolled to the bottom">
+        <div class="card-header-actions transcript-actions">
+          <label class="transcript-action-chip" title="Automatically keep the transcript scrolled to the bottom">
             <input class="js-auto-scroll-toggle" type="checkbox" checked>
+            <i class="fa-solid fa-arrows-up-down" aria-hidden="true"></i>
             <span>Auto-scroll</span>
           </label>
-          <label class="toggle-chip" title="Show technical details">
+          <label class="transcript-action-chip" title="Show technical details">
             <input class="js-see-details-toggle" type="checkbox">
+            <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
             <span>See Details</span>
           </label>
-          <button type="button" class="link-btn js-export-txt-btn">Export TXT</button>
-          <button type="button" class="link-btn js-copy-last-subject-btn" aria-keyshortcuts="Control+C Meta+C">Copy Last Subject <span class="shortcut-hint">Cmd/Ctrl+C</span></button>
+          <button type="button" class="transcript-action-chip js-export-txt-btn">
+            <i class="fa-solid fa-file-export" aria-hidden="true"></i>
+            <span>Export TXT</span>
+          </button>
+          <button
+            type="button"
+            class="transcript-action-chip js-copy-last-subject-btn"
+            aria-keyshortcuts="Control+C Meta+C"
+            title="Copy Last Subject (Cmd/Ctrl+C)"
+          >
+            <i class="fa-solid fa-copy" aria-hidden="true"></i>
+            <span>Copy Last Subject</span>
+          </button>
         </div>
       </div>
       <div class="file-progress hidden js-file-progress" aria-live="polite">

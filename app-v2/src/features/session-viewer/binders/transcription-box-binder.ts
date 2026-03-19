@@ -1,5 +1,5 @@
-import type { LiveTranscriptionRow } from "../../models/live-transcription-row";
-import { queryRequired } from "../dom";
+import type { LiveTranscriptionRow } from "../../../models/live-transcription-row";
+import { queryRequired } from "../../../binders/dom";
 
 export class TranscriptionBoxBinder {
   public readonly root: HTMLElement;

@@ -1,4 +1,4 @@
-import type { GlobalConfigsBinder } from "../../binders/controls/global-configs-binder";
+import type { GlobalConfigsBinder } from "./binders/global-configs-binder";
 import type { GlobalConfigsRepository } from "./repository";
 import {
   DEFAULT_GLOBAL_CONFIGS_STATE,

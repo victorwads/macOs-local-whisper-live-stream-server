@@ -1,4 +1,39 @@
 /* Session Viewer (Live Transcription) */
+.transcript-actions {
+    gap: 8px;
+}
+
+.transcript-action-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border: 1px solid #bfdbfe;
+    border-radius: 999px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    line-height: 1;
+    text-decoration: none;
+}
+
+.transcript-action-chip:hover {
+    background: #dbeafe;
+}
+
+.transcript-action-chip input {
+    width: 14px;
+    height: 14px;
+    margin: 0;
+}
+
+.transcript-action-chip[type="button"] {
+    appearance: none;
+    -webkit-appearance: none;
+}
+
 .transcript-section {
     display: flex;
     flex-direction: column;
@@ -168,6 +203,21 @@
     color: #222;
 }
 
+.transcript-edited-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid #c7d2fe;
+    background: #eef2ff;
+    color: #4338ca;
+    border-radius: 999px;
+    padding: 2px 7px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
 .transcript-edit-btn {
     border: none;
     background: transparent;
@@ -180,6 +230,25 @@
 
 .transcript-line:hover .transcript-edit-btn,
 .transcript-edit-btn:focus-visible {
+    opacity: 1;
+}
+
+.transcript-retranscribe-btn {
+    border: none;
+    background: transparent;
+    color: #334155;
+    cursor: pointer;
+    padding: 0;
+    opacity: 0;
+    transition: opacity 120ms ease-in-out;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.75rem;
+}
+
+.transcript-line:hover .transcript-retranscribe-btn,
+.transcript-retranscribe-btn:focus-visible {
     opacity: 1;
 }
 
@@ -351,7 +420,6 @@
     color: #334155;
     font-size: 0.78rem;
     white-space: nowrap;
-    order: -1;
     margin-right: 4px;
 }
 

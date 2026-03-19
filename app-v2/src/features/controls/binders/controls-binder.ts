@@ -1,7 +1,7 @@
-import { queryRequired } from "../dom";
+import { queryRequired } from "../../../binders/dom";
 import { DebugInfoBinder } from "./debug-info-binder";
-import { GlobalConfigsBinder } from "./global-configs-binder";
-import { ModelConfigsBinder } from "./model-configs-binder";
+import { GlobalConfigsBinder } from "../../global-configs/binders/global-configs-binder";
+import { ModelConfigsBinder } from "../../model-configs/binders/model-configs-binder";
 
 export class ControlsBinder {
   public readonly root: HTMLElement;

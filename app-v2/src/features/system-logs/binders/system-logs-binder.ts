@@ -1,4 +1,4 @@
-import { queryRequired } from "../dom";
+import { queryRequired } from "../../../binders/dom";
 
 export class SystemLogsBinder {
   public readonly root: HTMLElement;

@@ -1,8 +1,8 @@
 import { queryRequired } from "./dom";
-import { ControlsBinder } from "./controls/controls-binder";
-import { LiveTranscriptionsBinder } from "./live-transcriptions/live-transcriptions-binder";
-import { SessionsBinder } from "./sessions/sessions-binder";
-import { SystemLogsBinder } from "./system-logs/system-logs-binder";
+import { ControlsBinder } from "../features/controls/binders/controls-binder";
+import { LiveTranscriptionsBinder } from "../features/session-viewer/binders/live-transcriptions-binder";
+import { SessionsBinder } from "../features/sessions/binders/sessions-binder";
+import { SystemLogsBinder } from "../features/system-logs/binders/system-logs-binder";
 
 export class AppLayoutBinder {
   public readonly root: HTMLElement;

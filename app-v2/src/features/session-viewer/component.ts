@@ -1,4 +1,4 @@
-import type { LiveTranscriptionsBinder } from "../../binders/live-transcriptions/live-transcriptions-binder";
+import type { LiveTranscriptionsBinder } from "./binders/live-transcriptions-binder";
 import type {
   SessionsComponent,
   TranscriptionSegment,

@@ -5,6 +5,7 @@ import {
   MIN_SEGMENT_DURATION_MS,
   SEGMENT_TIME_STEP_MS
 } from "./helpers/time-format";
+import { SessionViewerSegmentBinder } from "./segment-binder";
 
 interface SessionViewerSegmentComponentOptions {
   segment: TranscriptionSegment;
@@ -18,6 +19,7 @@ interface SessionViewerSegmentComponentOptions {
 export class SessionViewerSegmentComponent {
   public readonly root: HTMLElement;
   public readonly extraElements: HTMLElement[] = [];
+  private readonly binder: SessionViewerSegmentBinder;
 
   private readonly segment: TranscriptionSegment;
   private readonly subject: TranscriptionSubject | null;
@@ -45,23 +47,24 @@ export class SessionViewerSegmentComponent {
     this.onRequestScroll = options.onRequestScroll;
 
     this.resetDraft();
-    const { root, extraElements } = this.build();
-    this.root = root;
-    this.extraElements.push(...extraElements);
+    this.binder = this.build();
+    this.root = this.binder.root;
+    this.extraElements.push(...this.binder.extraElements);
+    this.lineElement = this.binder.lineElement;
+    this.textElement = this.binder.textElement;
+    this.editButtonElement = this.binder.editButtonElement;
   }
 
-  private build(): { root: HTMLElement; extraElements: HTMLElement[] } {
+  private build(): SessionViewerSegmentBinder {
     if (this.segment.type === "subject") {
-      const items = this.renderSubjectSeparator();
-      return { root: items[0], extraElements: items.slice(1) };
+      return SessionViewerSegmentBinder.createSubject(this.segment, this.subject, this.onRequestCopySubject);
     }
 
     if (this.segment.type === "model_change") {
-      return { root: this.renderModelChangeSeparator(), extraElements: [] };
+      return SessionViewerSegmentBinder.createModelChange(this.segment);
     }
 
-    const items = this.renderTimelineSegment();
-    return { root: items[0], extraElements: items.slice(1) };
+    return this.createTimelineBinder();
   }
 
   private resetDraft(): void {
@@ -70,85 +73,8 @@ export class SessionViewerSegmentComponent {
     this.draftEndMs = this.segment.endMs;
   }
 
-  private renderSubjectSeparator(): HTMLElement[] {
-    const separator = document.createElement("div");
-    separator.className = "transcript-lap-separator";
-    separator.dataset.lapId = this.segment.subjectId ?? "";
-    separator.title = "Click to copy this subject";
-
-    const subjectText = this.subject?.name?.trim() || this.segment.text.trim() || "New Subject";
-
-    const leftLine = document.createElement("div");
-    leftLine.className = "transcript-lap-line";
-
-    const rightLine = document.createElement("div");
-    rightLine.className = "transcript-lap-line";
-
-    const center = document.createElement("div");
-    center.className = "transcript-lap-center";
-    center.innerHTML = `<i class="fa-solid fa-bookmark" aria-hidden="true"></i> ${formatRelativeTimeFromMs(this.segment.startMs)} • ${subjectText}`;
-    center.addEventListener("click", (event) => {
-      event.stopPropagation();
-      this.onRequestCopySubject(subjectText);
-    });
-
-    separator.appendChild(leftLine);
-    separator.appendChild(center);
-    separator.appendChild(rightLine);
-
-    const items: HTMLElement[] = [separator];
-
-    const hint = this.segment.processing?.lastMessage?.trim();
-    if (hint) {
-      const hintElement = document.createElement("div");
-      hintElement.className = "transcript-lap-hint";
-      hintElement.textContent = `Última frase: ${hint}`;
-      items.push(hintElement);
-    }
-
-    return items;
-  }
-
-  private renderModelChangeSeparator(): HTMLDivElement {
-    const separator = document.createElement("div");
-    separator.className = "transcript-model-separator dev-detail";
-
-    const leftLine = document.createElement("div");
-    leftLine.className = "transcript-model-line";
-
-    const rightLine = document.createElement("div");
-    rightLine.className = "transcript-model-line";
-
-    const center = document.createElement("div");
-    center.className = "transcript-model-center";
-    center.innerHTML = `<i class="fa-solid fa-microchip" aria-hidden="true"></i> ${formatRelativeTimeFromMs(this.segment.startMs)} • ${this.segment.text}`;
-
-    separator.appendChild(leftLine);
-    separator.appendChild(center);
-    separator.appendChild(rightLine);
-
-    return separator;
-  }
-
-  private renderTimelineSegment(): HTMLElement[] {
-    const line = document.createElement("div");
-    line.className = "transcript-line";
-    line.dataset.segmentId = this.segment.id;
-    line.addEventListener("click", () => this.onRequestSelectLine(line));
-
-    const playButton = document.createElement("button");
-    playButton.type = "button";
-    playButton.className = "transcript-play-btn";
-    playButton.title = "Play segment audio";
-    playButton.setAttribute("aria-label", "Play segment audio");
-    playButton.disabled = true;
-    playButton.setAttribute("aria-disabled", "true");
-    playButton.innerHTML = "<i class=\"fa-solid fa-play\" aria-hidden=\"true\"></i>";
-
-    const timestamp = document.createElement("span");
-    timestamp.className = "transcript-ts";
-    timestamp.textContent = formatRelativeTimeFromMs(this.segment.startMs);
-
+  private createTimelineBinder(): SessionViewerSegmentBinder {
+    const hasAudio = this.hasSegmentAudio();
     const audioDurationSec = Math.max(0, (this.segment.endMs - this.segment.startMs) / 1000);
     const processingTimeMs = this.segment.processing?.processingTimeMs ?? null;
     const partialsSent = this.segment.processing?.partialsSent ?? null;
@@ -159,61 +85,20 @@ export class SessionViewerSegmentComponent {
     const avgWordLabel = this.formatAvgTimePerWord(audioDurationSec, this.segment.text);
     const partialsLabel = this.formatPartialsSent(partialsSent);
 
-    const audio = document.createElement("span");
-    audio.className = "transcript-meta-audio dev-detail";
-    if (audioLabel) audio.textContent = ` ${audioLabel}`;
-
-    const text = document.createElement("span");
-    text.className = "transcript-text";
-    text.textContent = this.segment.text;
-    text.title = "Double click to edit segment";
-    text.addEventListener("dblclick", (event) => {
-      event.stopPropagation();
-      this.enterEditMode();
+    return SessionViewerSegmentBinder.createTimeline({
+      segment: this.segment,
+      hasAudio,
+      audioLabel,
+      processingLabel,
+      rateLabel,
+      avgWordLabel,
+      partialsLabel,
+      onSelectLine: (line) => this.onRequestSelectLine(line),
+      onEdit: () => this.enterEditMode(),
+      onReTranscribe: async () => {
+        await this.reTranscribeSegment();
+      }
     });
-
-    const editButton = document.createElement("button");
-    editButton.type = "button";
-    editButton.className = "transcript-edit-btn";
-    editButton.title = "Edit segment";
-    editButton.setAttribute("aria-label", "Edit segment");
-    editButton.innerHTML = "<i class=\"fa-solid fa-pen\" aria-hidden=\"true\"></i>";
-    editButton.addEventListener("click", (event) => {
-      event.stopPropagation();
-      this.enterEditMode();
-    });
-
-    const processing = document.createElement("span");
-    processing.className = "transcript-meta-processing dev-detail";
-    if (processingLabel) processing.textContent = ` ${processingLabel}`;
-
-    const rate = document.createElement("span");
-    rate.className = "transcript-meta-rate dev-detail";
-    if (rateLabel) rate.textContent = ` ${rateLabel}`;
-
-    const avgWord = document.createElement("span");
-    avgWord.className = "transcript-meta-wordtime dev-detail";
-    if (avgWordLabel) avgWord.textContent = ` ${avgWordLabel}`;
-
-    const partials = document.createElement("span");
-    partials.className = "transcript-meta-partials dev-detail";
-    if (partialsLabel) partials.textContent = ` ${partialsLabel}`;
-
-    line.appendChild(playButton);
-    line.appendChild(timestamp);
-    if (audioLabel) line.appendChild(audio);
-    line.appendChild(text);
-    line.appendChild(editButton);
-    if (processingLabel) line.appendChild(processing);
-    if (rateLabel) line.appendChild(rate);
-    if (avgWordLabel) line.appendChild(avgWord);
-    if (partialsLabel) line.appendChild(partials);
-
-    this.lineElement = line;
-    this.textElement = text;
-    this.editButtonElement = editButton;
-
-    return [line];
   }
 
   private enterEditMode(): void {
@@ -311,9 +196,9 @@ export class SessionViewerSegmentComponent {
     endWrap.appendChild(endValue);
     endWrap.appendChild(endDrag);
 
-    timesRow.prepend(dragTip);
     timesRow.appendChild(startWrap);
     timesRow.appendChild(endWrap);
+    timesRow.appendChild(dragTip);
 
     const actions = document.createElement("div");
     actions.className = "segment-editor-actions";
@@ -366,16 +251,63 @@ export class SessionViewerSegmentComponent {
   private async saveEditMode(): Promise<void> {
     const normalizedText = this.draftText.trim();
     const normalizedRange = clampSegmentRange(this.draftStartMs, this.draftEndMs, MIN_SEGMENT_DURATION_MS);
+    const nextText = normalizedText || this.segment.text;
+    const hasChanged = (
+      nextText !== this.segment.text ||
+      normalizedRange.startMs !== this.segment.startMs ||
+      normalizedRange.endMs !== this.segment.endMs
+    );
+
+    const originalSnapshot = this.segment.original
+      ? this.segment.original
+      : (hasChanged
+        ? {
+            text: this.segment.text,
+            startMs: this.segment.startMs,
+            endMs: this.segment.endMs
+          }
+        : null);
 
     const updatedSegment: TranscriptionSegment = {
       ...this.segment,
-      text: normalizedText || this.segment.text,
+      text: nextText,
       startMs: normalizedRange.startMs,
-      endMs: normalizedRange.endMs
+      endMs: normalizedRange.endMs,
+      original: originalSnapshot
     };
 
     await this.onRequestSaveSegment(updatedSegment);
     this.cancelEditMode();
+  }
+
+  private async reTranscribeSegment(): Promise<void> {
+    if (!this.hasSegmentAudio()) {
+      return;
+    }
+
+    const currentReprocessCount = Number(this.segment.processing?.reprocessCount ?? 0);
+    const updatedSegment: TranscriptionSegment = {
+      ...this.segment,
+      status: "reprocessed",
+      processing: {
+        ...(this.segment.processing ?? {}),
+        reprocessCount: Number.isFinite(currentReprocessCount) ? currentReprocessCount + 1 : 1,
+        lastMessage: "Marked for re-transcription from segment action."
+      }
+    };
+
+    await this.onRequestSaveSegment(updatedSegment);
+  }
+
+  private hasSegmentAudio(): boolean {
+    const segmentAny = this.segment as unknown as { sourceAudioId?: string; audioId?: string };
+    const processingAny = this.segment.processing as unknown as { audioId?: string } | null | undefined;
+
+    return Boolean(
+      (typeof segmentAny.sourceAudioId === "string" && segmentAny.sourceAudioId.trim().length > 0) ||
+      (typeof segmentAny.audioId === "string" && segmentAny.audioId.trim().length > 0) ||
+      (typeof processingAny?.audioId === "string" && processingAny.audioId.trim().length > 0)
+    );
   }
 
   private bindTimeDrag(

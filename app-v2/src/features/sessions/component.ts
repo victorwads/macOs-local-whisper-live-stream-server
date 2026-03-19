@@ -1,4 +1,4 @@
-import type { SessionsBinder } from "../../binders";
+import type { SessionsBinder } from "./binders/sessions-binder";
 import type { TranscriptionSegment } from "./models/transcription-segment";
 import type { TranscriptionSession } from "./models/transcription-session";
 import type { TranscriptionSubject } from "./models/transcription-subject";

@@ -1,4 +1,4 @@
-import { queryRequired } from "../dom";
+import { queryRequired } from "../../../binders/dom";
 import { PlayerBinder } from "./player-binder";
 import { TranscriptionBoxBinder } from "./transcription-box-binder";
 

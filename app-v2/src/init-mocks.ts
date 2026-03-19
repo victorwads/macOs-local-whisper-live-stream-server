@@ -3,6 +3,7 @@ import {
   IndexedDbTranscriptionSessionsRepository,
   IndexedDbTranscriptionSubjectsRepository,
   SESSIONS_DB_NAME,
+  type SegmentOriginalSnapshot,
   type SegmentProcessingMeta,
   type SegmentStatus,
   type SegmentType
@@ -23,6 +24,7 @@ interface MockSegmentSeed {
   type?: SegmentType;
   status?: SegmentStatus;
   processing?: SegmentProcessingMeta | null;
+  original?: SegmentOriginalSnapshot | null;
 }
 
 interface MockSubjectSeed {
@@ -46,6 +48,11 @@ const MOCK_SUBJECTS: MockSubjectSeed[] = [
         durationMs: 2800,
         gapAfterMs: 450,
         type: "speech",
+        original: {
+          text: "Quick context before implementation starts.",
+          startMs: 920,
+          endMs: 3720
+        },
         processing: {
           model: "gpt-4o-mini-transcribe",
           reprocessCount: 2,
@@ -130,7 +137,17 @@ const MOCK_SUBJECTS: MockSubjectSeed[] = [
           lastMessage: "Reprocessed after custom glossary update."
         }
       },
-      { text: "For microphone input we stream chunks and keep timeline offsets.", durationMs: 3700, gapAfterMs: 520, type: "speech" },
+      {
+        text: "For microphone input we stream chunks and keep timeline offsets.",
+        durationMs: 3700,
+        gapAfterMs: 520,
+        type: "speech",
+        original: {
+          text: "For mic input we stream chunks and keep timeline offsets.",
+          startMs: 6310,
+          endMs: 10010
+        }
+      },
       { text: "[silence]", durationMs: 900, gapAfterMs: 260, type: "silence", processing: null },
       { text: "Segment boundaries must remain monotonic and non-overlapping.", durationMs: 3300, gapAfterMs: 500, type: "speech" },
       { text: "When processing fails we keep last message in segment metadata.", durationMs: 3400, gapAfterMs: 550, type: "speech" },
@@ -156,7 +173,17 @@ const MOCK_SUBJECTS: MockSubjectSeed[] = [
         status: "draft"
       },
       { text: "Subject markers must be visually distinct from speech rows.", durationMs: 3100, gapAfterMs: 470, type: "speech" },
-      { text: "Timeline seek should jump to segment start reliably.", durationMs: 2900, gapAfterMs: 500, type: "speech" },
+      {
+        text: "Timeline seek should jump to segment start reliably.",
+        durationMs: 2900,
+        gapAfterMs: 500,
+        type: "speech",
+        original: {
+          text: "Timeline seek should jump to segment start.",
+          startMs: 45160,
+          endMs: 48060
+        }
+      },
       { text: "Bulk copy for one subject helps documentation workflows.", durationMs: 3000, gapAfterMs: 510, type: "speech" },
       { text: "[silence]", durationMs: 800, gapAfterMs: 200, type: "silence", processing: null },
       { text: "Empty states need call to action for first recording.", durationMs: 2800, gapAfterMs: 520, type: "speech" }
@@ -221,7 +248,7 @@ async function seedSession(
       const startMs = cursor;
       const endMs = startMs + segmentSeed.durationMs;
 
-      await segmentsRepository.create({
+      const createdSegment = await segmentsRepository.create({
         sessionId,
         subjectId: subject.id,
         type: segmentSeed.type ?? "speech",
@@ -231,6 +258,13 @@ async function seedSession(
         status: segmentSeed.status ?? "final",
         processing: segmentSeed.processing
       });
+
+      if (segmentSeed.original) {
+        await segmentsRepository.update({
+          ...createdSegment,
+          original: segmentSeed.original
+        });
+      }
 
       cursor = endMs + segmentSeed.gapAfterMs;
     }

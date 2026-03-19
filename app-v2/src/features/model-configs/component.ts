@@ -1,4 +1,4 @@
-import type { ModelConfigsBinder } from "../../binders/controls/model-configs-binder";
+import type { ModelConfigsBinder } from "./binders/model-configs-binder";
 import { formatByteSize } from "../../helpers/format-byte-size";
 import type { BackendModelInfo } from "../backends";
 import type { ModelConfigsRepository } from "./repository";

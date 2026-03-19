@@ -2,6 +2,12 @@ export type SegmentType = "speech" | "silence" | "subject" | "model_change";
 
 export type SegmentStatus = "draft" | "final" | "reprocessed" | "error";
 
+export interface SegmentOriginalSnapshot {
+  text: string;
+  startMs: number;
+  endMs: number;
+}
+
 /** Optional technical metadata about segment processing. */
 export interface SegmentProcessingMeta {
   /** Model used to generate/update this segment. */
@@ -47,6 +53,12 @@ export interface TranscriptionSegment {
   updatedAt: number;
   /** Optional technical processing metadata. Can be null for non-processed segment types. */
   processing?: SegmentProcessingMeta | null;
+  /**
+   * Original segment snapshot before first manual edit.
+   * - null/undefined: never edited
+   * - object: edited at least once
+   */
+  original?: SegmentOriginalSnapshot | null;
 }
 
 /**
