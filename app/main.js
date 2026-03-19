@@ -66,6 +66,7 @@ export class App {
     this.pendingQueueWaiters = [];
     this.audioClock = new AudioClockScheduler(0);
     this.silenceCommitTimerId = null;
+    this.speechResumeConfirmTimerId = null;
     this.partialTimerId = null;
     this.silenceUiIntervalId = null;
     this.backendConnected = false;
@@ -80,6 +81,7 @@ export class App {
       audioUsageBytes: null,
     };
     this.hasSpeechSinceLastSilence = true;
+    this.autoLapTriggeredForCurrentSilence = false;
 
     this.init();
   }
@@ -192,23 +194,24 @@ export class App {
 
     this.audioState.subscribe('change', ({ isSilent, triggerDuration, silenceDuration }) => {
       if (isSilent) {
+        this.clearSpeechResumeConfirmTimer();
         if (this.processingMode === 'file') {
           this.logFileVadEvent('speech_end_candidate', {
             audioTimeMs: this.fileCurrentAudioMs,
             triggerDurationMs: Math.round(triggerDuration || 0),
           });
         }
-        this.silenceStartedAtMs = this.processingMode === 'file'
-          ? this.fileCurrentAudioMs
-          : this.micCurrentAudioMs;
+        if (!this.pendingSilenceChunks.length) {
+          this.silenceStartedAtMs = this.processingMode === 'file'
+            ? this.fileCurrentAudioMs
+            : this.micCurrentAudioMs;
+        }
         const configuredMinSilence = Number(this.config.get('minSilence')) || 0;
         const confirmMs = Math.max(80, Math.min(240, Math.round(configuredMinSilence * 0.35)));
         this.scheduleSilenceCommit(confirmMs, triggerDuration, configuredMinSilence);
       } else {
-        void this.flushPendingSilenceSegment('speech_start');
         this.clearSilenceCommitTimer();
-        this.silenceStartedAtMs = 0;
-        this.hasSpeechSinceLastSilence = true;
+        this.scheduleSpeechResumeConfirmation();
         // Speech Started
         if (this.processingMode === 'file') {
           this.logFileVadEvent('speech_start', {
@@ -1106,8 +1109,10 @@ export class App {
       this.pendingSegmentMetaQueue = [];
       this.currentLapId = this.generateLapId();
       this.resetPendingSilenceCollector();
+      this.autoLapTriggeredForCurrentSilence = false;
       this.micCurrentAudioMs = 0;
       this.resetAudioClock(0);
+      this.clearSpeechResumeConfirmTimer();
       if (typeof this.audioState.resetRuntimeState === 'function') {
         this.audioState.resetRuntimeState(0);
       }
@@ -1162,6 +1167,8 @@ export class App {
     this.micCurrentAudioMs = 0;
     this.resetPendingSilenceCollector();
     this.hasSpeechSinceLastSilence = true;
+    this.autoLapTriggeredForCurrentSilence = false;
+    this.clearSpeechResumeConfirmTimer();
     this.resetAudioClock(0);
     this.stopPartialScheduler();
     this.clearSilenceCommitTimer();
@@ -1239,6 +1246,25 @@ export class App {
     this.silenceCommitTimerId = null;
   }
 
+  clearSpeechResumeConfirmTimer() {
+    if (!this.speechResumeConfirmTimerId) return;
+    this.audioClock.clearTimeout(this.speechResumeConfirmTimerId);
+    this.speechResumeConfirmTimerId = null;
+  }
+
+  scheduleSpeechResumeConfirmation() {
+    this.clearSpeechResumeConfirmTimer();
+    const confirmMs = Math.max(600, (Number(this.config.get('minSpeak')) || 0) * 3);
+    this.speechResumeConfirmTimerId = this.audioClock.setTimeout(() => {
+      this.speechResumeConfirmTimerId = null;
+      if (!this.streamingActive || this.audioState.isSilent) return;
+      this.hasSpeechSinceLastSilence = true;
+      this.autoLapTriggeredForCurrentSilence = false;
+      this.silenceStartedAtMs = 0;
+      void this.flushPendingSilenceSegment('speech_start_confirmed');
+    }, confirmMs);
+  }
+
   scheduleSilenceCommit(confirmMs, triggerDuration, configuredMinSilence) {
     this.clearSilenceCommitTimer();
     const commit = () => {
@@ -1274,10 +1300,15 @@ export class App {
     if (this.silenceUiIntervalId) return;
     this.silenceUiIntervalId = this.audioClock.setInterval(() => {
       const nowMs = this.getCurrentAudioMs();
-      const silenceDurationMs = this.audioState.isSilent
+      const rawSilenceDurationMs = this.audioState.isSilent
         ? (Number.isFinite(this.silenceStartedAtMs) ? Math.max(0, nowMs - this.silenceStartedAtMs) : 0)
         : (this.audioState.stats?.silenceCandidateMs || 0);
+      const pendingSilenceDurationMs = this.getPendingSilenceDurationMs();
+      const silenceDurationMs = this.audioState.isSilent
+        ? Math.max(rawSilenceDurationMs, pendingSilenceDurationMs)
+        : rawSilenceDurationMs;
       this.ui.updateSilenceDuration(silenceDurationMs, this.audioState.isSilent);
+      this.maybeCreateAutoLapFromSilence(silenceDurationMs);
     }, 120);
   }
 
@@ -1304,6 +1335,29 @@ export class App {
       parts.push(`${key}=${value}`);
     });
     this.ui.addLog(parts.join(' '));
+  }
+
+  maybeCreateAutoLapFromSilence(silenceDurationMs) {
+    if (!this.streamingActive || !this.audioState.isSilent) return;
+    if (this.autoLapTriggeredForCurrentSilence) return;
+    const thresholdSec = Number(this.config.get('autoSubjectSilenceSec'));
+    if (!Number.isFinite(thresholdSec) || thresholdSec <= 0) return;
+    const thresholdMs = Math.round(thresholdSec * 1000);
+    if (!Number.isFinite(silenceDurationMs) || silenceDurationMs < thresholdMs) return;
+    this.autoLapTriggeredForCurrentSilence = true;
+    if (!this.hasFinalInCurrentLap()) return;
+    this.addLapMarker();
+    this.ui.addLog(`Auto Subject created after ${Math.round(thresholdSec)}s of silence.`);
+  }
+
+  getPendingSilenceDurationMs() {
+    const sampleRate = this.pendingSilenceSampleRate || 16000;
+    if (!this.pendingSilenceSamples || !Number.isFinite(sampleRate) || sampleRate <= 0) return 0;
+    return (this.pendingSilenceSamples / sampleRate) * 1000;
+  }
+
+  hasFinalInCurrentLap() {
+    return this.transcriptItems.some((item) => item.type === 'final' && item.lapId === this.currentLapId);
   }
 
   resetPendingSilenceCollector() {

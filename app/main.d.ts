@@ -38,6 +38,7 @@ export class App {
   pendingQueueWaiters: Array<() => void>;
   audioClock: AudioClockScheduler;
   silenceCommitTimerId: number | null;
+  speechResumeConfirmTimerId: number | null;
   partialTimerId: number | null;
   silenceUiIntervalId: number | null;
   backendConnected: boolean;
@@ -46,6 +47,7 @@ export class App {
   pendingSilenceStartSec: number | null;
   pendingSilenceSampleRate: number;
   hasSpeechSinceLastSilence: boolean;
+  autoLapTriggeredForCurrentSilence: boolean;
   constructor();
   init(): void;
   hydrateTranscript(): void;
@@ -118,10 +120,15 @@ export class App {
   resetAudioClock(startMs?: number): void;
   getCurrentAudioMs(): number;
   clearSilenceCommitTimer(): void;
+  clearSpeechResumeConfirmTimer(): void;
+  scheduleSpeechResumeConfirmation(): void;
   scheduleSilenceCommit(confirmMs: number, triggerDuration?: number, configuredMinSilence?: number): void;
   startSilenceUiTicker(): void;
   stopSilenceUiTicker(): void;
   logFileVadEvent(eventName: string, extras?: Record<string, unknown>): void;
+  maybeCreateAutoLapFromSilence(silenceDurationMs: number): void;
+  getPendingSilenceDurationMs(): number;
+  hasFinalInCurrentLap(): boolean;
   resetPendingSilenceCollector(): void;
   collectPendingSilenceChunk(chunk: Float32Array, sampleRate: number, nowMs: number): void;
   flushPendingSilenceSegment(reason?: string): Promise<void>;

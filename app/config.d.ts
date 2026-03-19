@@ -10,6 +10,7 @@ export interface AppConfigState {
   language: string;
   partialIntervalMin: number;
   partialIntervalMax: number;
+  autoSubjectSilenceSec: number;
   lapVoicePhrase: string;
   lapVoiceMatchMode: "contains" | "starts_with";
   copyVoicePhrase: string;

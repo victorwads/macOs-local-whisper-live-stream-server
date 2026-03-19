@@ -26,6 +26,7 @@ export class UIManager {
       lapVoicePhraseInput: document.getElementById('lapVoicePhraseInput'),
       lapVoiceMatchModeInput: document.getElementById('lapVoiceMatchModeInput'),
       copyVoicePhraseInput: document.getElementById('copyVoicePhraseInput'),
+      autoSubjectSilenceSecInput: document.getElementById('autoSubjectSilenceSecInput'),
       loadedLang: document.getElementById('loadedLang'),
       partialIntervalMinInput: document.getElementById('partialIntervalMinInput'),
       partialIntervalMaxInput: document.getElementById('partialIntervalMaxInput'),
@@ -94,6 +95,7 @@ export class UIManager {
     if (this.dom.lapVoicePhraseInput) this.dom.lapVoicePhraseInput.value = this.config.get('lapVoicePhrase');
     if (this.dom.lapVoiceMatchModeInput) this.dom.lapVoiceMatchModeInput.value = this.config.get('lapVoiceMatchMode');
     if (this.dom.copyVoicePhraseInput) this.dom.copyVoicePhraseInput.value = this.config.get('copyVoicePhrase');
+    if (this.dom.autoSubjectSilenceSecInput) this.dom.autoSubjectSilenceSecInput.value = this.config.get('autoSubjectSilenceSec');
     if (this.dom.partialIntervalMinInput) this.dom.partialIntervalMinInput.value = this.config.get('partialIntervalMin');
     if (this.dom.partialIntervalMaxInput) this.dom.partialIntervalMaxInput.value = this.config.get('partialIntervalMax');
     if (this.dom.autoScrollToggle) this.dom.autoScrollToggle.checked = this.autoScrollEnabled;
@@ -145,6 +147,7 @@ export class UIManager {
     bindInput(this.dom.languageInput, 'language', false);
     bindInput(this.dom.lapVoicePhraseInput, 'lapVoicePhrase', false);
     bindInput(this.dom.copyVoicePhraseInput, 'copyVoicePhrase', false);
+    bindInput(this.dom.autoSubjectSilenceSecInput, 'autoSubjectSilenceSec');
 
     this.dom.lapVoiceMatchModeInput?.addEventListener('change', () => {
       this.emit('configChange', { key: 'lapVoiceMatchMode', value: this.dom.lapVoiceMatchModeInput.value });

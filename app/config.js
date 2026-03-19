@@ -12,6 +12,7 @@ export class ConfigManager {
       language: 'auto',
       partialIntervalMin: 300,
       partialIntervalMax: 1500,
+      autoSubjectSilenceSec: 20,
       lapVoicePhrase: 'new subject',
       lapVoiceMatchMode: 'contains',
       copyVoicePhrase: 'copy last subject',
@@ -23,6 +24,7 @@ export class ConfigManager {
       'lapVoicePhrase',
       'lapVoiceMatchMode',
       'copyVoicePhrase',
+      'autoSubjectSilenceSec',
     ];
 
     this.familyNumericKeys = [
