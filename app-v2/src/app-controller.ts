@@ -7,8 +7,10 @@ import {
   type BackendId
 } from "./features/backends";
 import { SessionViewerComponent } from "./features/session-viewer";
+import { FailureRecoveryController } from "./features/failure-recovery";
 import {
   CacheStorageSessionAudioFilesRepository,
+  IndexedDbSessionPendingAudioChunksRepository,
   IndexedDbTranscriptionSegmentsRepository,
   IndexedDbTranscriptionSessionsRepository,
   IndexedDbTranscriptionSubjectsRepository,
@@ -33,6 +35,7 @@ export class AppController {
   public readonly sessionsComponent: SessionsComponent;
   public readonly sessionViewerComponent: SessionViewerComponent;
   public readonly modelsCatalog: ModelsCatalog;
+  public readonly failureRecoveryController: FailureRecoveryController;
 
   public constructor(root: HTMLElement) {
     this.binders = new AppLayoutBinder(root);
@@ -52,9 +55,17 @@ export class AppController {
     const subjectsRepository = new IndexedDbTranscriptionSubjectsRepository();
     const segmentsRepository = new IndexedDbTranscriptionSegmentsRepository();
     const sessionAudioFilesRepository = new CacheStorageSessionAudioFilesRepository();
+    const sessionPendingAudioChunksRepository = new IndexedDbSessionPendingAudioChunksRepository();
     const sessionsRepository = new IndexedDbTranscriptionSessionsRepository(
       subjectsRepository,
       segmentsRepository,
+      sessionAudioFilesRepository,
+      sessionPendingAudioChunksRepository
+    );
+
+    this.failureRecoveryController = new FailureRecoveryController(
+      sessionsRepository,
+      sessionPendingAudioChunksRepository,
       sessionAudioFilesRepository
     );
 
@@ -63,7 +74,8 @@ export class AppController {
       sessionsRepository,
       subjectsRepository,
       segmentsRepository,
-      sessionAudioFilesRepository
+      sessionAudioFilesRepository,
+      sessionPendingAudioChunksRepository
     );
 
     this.sessionViewerComponent = new SessionViewerComponent(
@@ -76,6 +88,7 @@ export class AppController {
 
   public async initialize(): Promise<void> {
     this.modelConfigsComponent.initialize();
+    await this.failureRecoveryController.run();
     await this.sessionsComponent.initialize();
     await this.sessionViewerComponent.initialize();
     this.sessionsComponent.bindHashChange(() => {

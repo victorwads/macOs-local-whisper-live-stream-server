@@ -8,6 +8,10 @@ import {
   type SessionAudioFilesRepository
 } from "./session-audio-files-repository";
 import {
+  IndexedDbSessionPendingAudioChunksRepository,
+  type SessionPendingAudioChunksRepository
+} from "./session-pending-audio-chunks-repository";
+import {
   IndexedDbTranscriptionSegmentsRepository,
   type TranscriptionSegmentsRepository
 } from "./transcription-segments-repository";
@@ -31,11 +35,20 @@ function sortByStartedAtDesc(sessions: TranscriptionSession[]): TranscriptionSes
   return [...sessions].sort((a, b) => b.startedAt - a.startedAt);
 }
 
+function normalizeStatus(session: TranscriptionSession): TranscriptionSession {
+  if (session.status) return session;
+  return {
+    ...session,
+    status: session.endedAt === null ? "active" : "finished"
+  };
+}
+
 export class IndexedDbTranscriptionSessionsRepository implements TranscriptionSessionsRepository {
   public constructor(
     private readonly subjectsRepository: TranscriptionSubjectsRepository = new IndexedDbTranscriptionSubjectsRepository(),
     private readonly segmentsRepository: TranscriptionSegmentsRepository = new IndexedDbTranscriptionSegmentsRepository(),
-    private readonly sessionAudioFilesRepository: SessionAudioFilesRepository = new CacheStorageSessionAudioFilesRepository()
+    private readonly sessionAudioFilesRepository: SessionAudioFilesRepository = new CacheStorageSessionAudioFilesRepository(),
+    private readonly sessionPendingAudioChunksRepository: SessionPendingAudioChunksRepository = new IndexedDbSessionPendingAudioChunksRepository()
   ) {}
 
   public async create(input: CreateTranscriptionSessionInput): Promise<TranscriptionSession> {
@@ -48,7 +61,8 @@ export class IndexedDbTranscriptionSessionsRepository implements TranscriptionSe
       startedAt: now,
       endedAt: null,
       sourceFileName: input.sourceFileName,
-      totalDurationMs: null
+      totalDurationMs: null,
+      status: "active"
     };
 
     await sessionsDb.transcription_sessions.add(entity);
@@ -69,7 +83,8 @@ export class IndexedDbTranscriptionSessionsRepository implements TranscriptionSe
     const updated: TranscriptionSession = {
       ...current,
       endedAt,
-      totalDurationMs
+      totalDurationMs,
+      status: "finished"
     };
 
     await sessionsDb.transcription_sessions.put(updated);
@@ -78,12 +93,12 @@ export class IndexedDbTranscriptionSessionsRepository implements TranscriptionSe
 
   public async getById(id: string): Promise<TranscriptionSession | null> {
     const value = await sessionsDb.transcription_sessions.get(id);
-    return value ?? null;
+    return value ? normalizeStatus(value) : null;
   }
 
   public async getAll(): Promise<TranscriptionSession[]> {
     const values = await sessionsDb.transcription_sessions.toArray();
-    return sortByStartedAtDesc(values);
+    return sortByStartedAtDesc(values.map(normalizeStatus));
   }
 
   public async getActive(): Promise<TranscriptionSession[]> {
@@ -92,11 +107,13 @@ export class IndexedDbTranscriptionSessionsRepository implements TranscriptionSe
   }
 
   public async update(session: TranscriptionSession): Promise<TranscriptionSession> {
-    await sessionsDb.transcription_sessions.put(session);
-    return session;
+    const normalized = normalizeStatus(session);
+    await sessionsDb.transcription_sessions.put(normalized);
+    return normalized;
   }
 
   public async delete(id: string): Promise<void> {
+    await this.sessionPendingAudioChunksRepository.deleteBySessionId(id);
     await this.segmentsRepository.deleteBySessionId(id);
     await this.subjectsRepository.deleteBySessionId(id);
     await this.sessionAudioFilesRepository.delete(id);

@@ -10,7 +10,7 @@ interface SessionTableRowComponentOptions {
   session: TranscriptionSession;
   counters: SessionTableRowCounters;
   audioSizeLabel: string;
-  statusLabel: "decoding" | "active" | "finished";
+  statusLabel: "decoding" | "recording" | "saving" | "error" | "active" | "finished";
   isSelected: boolean;
   sessionsRepository: TranscriptionSessionsRepository;
   onSelect: (sessionId: string) => void;
@@ -54,10 +54,22 @@ export class SessionTableRowComponent {
     return cell;
   }
 
-  private makeStatusCell(status: "decoding" | "active" | "finished"): HTMLTableCellElement {
+  private makeStatusCell(status: "decoding" | "recording" | "saving" | "error" | "active" | "finished"): HTMLTableCellElement {
     const cell = document.createElement("td");
     if (status === "decoding") {
       cell.innerHTML = "<span class=\"session-status session-status-decoding\"><i class=\"fa-solid fa-spinner fa-spin\" aria-hidden=\"true\"></i><span>decoding</span></span>";
+      return cell;
+    }
+    if (status === "saving") {
+      cell.innerHTML = "<span class=\"session-status session-status-saving\"><i class=\"fa-solid fa-spinner fa-spin\" aria-hidden=\"true\"></i><span>saving</span></span>";
+      return cell;
+    }
+    if (status === "recording") {
+      cell.innerHTML = "<span class=\"session-status session-status-recording\"><span class=\"recording-dot\" aria-hidden=\"true\"></span><span>recording</span></span>";
+      return cell;
+    }
+    if (status === "error") {
+      cell.innerHTML = "<span class=\"session-status session-status-error\"><i class=\"fa-solid fa-triangle-exclamation\" aria-hidden=\"true\"></i><span>error</span></span>";
       return cell;
     }
 

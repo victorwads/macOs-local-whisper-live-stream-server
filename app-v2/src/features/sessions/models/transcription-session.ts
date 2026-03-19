@@ -1,4 +1,5 @@
 export type SessionInputType = "microphone" | "file";
+export type SessionStatus = "active" | "finished" | "decoding" | "recording" | "saving" | "error";
 
 /**
  * Transcription session.
@@ -25,6 +26,8 @@ export interface TranscriptionSession {
   sourceFileName: string;
   /** Total duration in ms, computed on finish. Null until the session ends. */
   totalDurationMs: number | null;
+  /** Runtime status displayed in sessions table and used for recovery. */
+  status: SessionStatus;
 }
 
 /**

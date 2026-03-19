@@ -1,10 +1,11 @@
 import type { SessionsBinder } from "./binders/sessions-binder";
 import { formatByteSize } from "../../helpers/format-byte-size";
-import { decodeAudioFileToWav } from "./helpers/decode-audio-file-to-wav";
+import { decodeAudioFileToWav, MicrophoneSessionRecorder } from "../audio-processing";
 import type { TranscriptionSegment } from "./models/transcription-segment";
-import type { TranscriptionSession } from "./models/transcription-session";
+import type { SessionStatus, TranscriptionSession } from "./models/transcription-session";
 import type { TranscriptionSubject } from "./models/transcription-subject";
 import type { SessionAudioFilesRepository } from "./repositories/session-audio-files-repository";
+import type { SessionPendingAudioChunksRepository } from "./repositories/session-pending-audio-chunks-repository";
 import type { TranscriptionSegmentsRepository } from "./repositories/transcription-segments-repository";
 import type { TranscriptionSessionsRepository } from "./repositories/transcription-sessions-repository";
 import type { TranscriptionSubjectsRepository } from "./repositories/transcription-subjects-repository";
@@ -18,17 +19,17 @@ interface SessionCounters {
 export class SessionsComponent {
   private readonly hashChangeListeners = new Set<() => void>();
   private hashChangeBound = false;
-  private readonly micRunningBySessionId = new Map<string, boolean>();
   private readonly fileRunningBySessionId = new Map<string, boolean>();
-  private readonly decodingSessionIds = new Set<string>();
   private sessionsSnapshot: TranscriptionSession[] = [];
+  private readonly microphoneRecorder = new MicrophoneSessionRecorder();
 
   public constructor(
     public readonly binder: SessionsBinder,
     private readonly sessionsRepository: TranscriptionSessionsRepository,
     private readonly subjectsRepository: TranscriptionSubjectsRepository,
     private readonly segmentsRepository: TranscriptionSegmentsRepository,
-    private readonly sessionAudioFilesRepository: SessionAudioFilesRepository
+    private readonly sessionAudioFilesRepository: SessionAudioFilesRepository,
+    private readonly sessionPendingAudioChunksRepository: SessionPendingAudioChunksRepository
   ) {}
 
   public async initialize(): Promise<void> {
@@ -117,7 +118,12 @@ export class SessionsComponent {
     });
 
     this.binder.micToggleButton.addEventListener("click", async () => {
-      await this.handleMicToggle();
+      try {
+        await this.handleMicToggle();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Could not start microphone recording.";
+        window.alert(message);
+      }
     });
 
     this.binder.fileToggleButton.addEventListener("click", async () => {
@@ -135,7 +141,6 @@ export class SessionsComponent {
 
     if (mode === "microphone") {
       const createdMicSession = await this.createNewMicrophoneSession();
-      this.micRunningBySessionId.set(createdMicSession.id, false);
       this.setSessionIdToHash(createdMicSession.id);
       return createdMicSession;
     }
@@ -144,7 +149,7 @@ export class SessionsComponent {
     if (!file) return null;
 
     const createdFileSession = await this.createNewFileSession(file);
-    this.fileRunningBySessionId.set(createdFileSession.id, false);
+    this.fileRunningBySessionId.set(createdFileSession.id, createdFileSession.status === "recording");
     this.setSessionIdToHash(createdFileSession.id);
     return createdFileSession;
   }
@@ -154,7 +159,8 @@ export class SessionsComponent {
     return this.sessionsRepository.create({
       inputType: "microphone",
       sourceFileName: "mic-" + String(now) + ".wav",
-      startedAt: now
+      startedAt: now,
+      name: "Mic Session " + new Date(now).toLocaleTimeString()
     });
   }
 
@@ -166,18 +172,21 @@ export class SessionsComponent {
       sourceFileName: file.name,
       startedAt: now
     });
-    this.decodingSessionIds.add(created.id);
+    await this.updateSessionStatus(created, "decoding");
     this.setSessionIdToHash(created.id);
     await this.refresh();
 
     try {
       const decodedAudioBlob = await decodeAudioFileToWav(file);
       await this.sessionAudioFilesRepository.save(created.id, decodedAudioBlob);
+      await this.updateSessionStatus(created, "active");
+      return created;
+    } catch (error) {
+      await this.updateSessionStatus(created, "error");
+      throw error;
     } finally {
-      this.decodingSessionIds.delete(created.id);
+      await this.refresh();
     }
-
-    return created;
   }
 
   private promptNewSessionInputType(): "microphone" | "file" | null {
@@ -214,9 +223,32 @@ export class SessionsComponent {
   private async handleMicToggle(): Promise<void> {
     const session = await this.resolveCurrentSession();
     if (!session || session.inputType !== "microphone") return;
+    if (session.status === "saving") return;
 
-    const running = this.micRunningBySessionId.get(session.id) ?? false;
-    this.micRunningBySessionId.set(session.id, !running);
+    const running = session.status === "recording";
+    if (!running) {
+      await this.microphoneRecorder.start({
+        onChunkBlob: async (blob) => {
+          await this.sessionPendingAudioChunksRepository.addChunk(session.id, blob, blob.type);
+          await this.refresh();
+        }
+      });
+      await this.updateSessionStatus(session, "recording");
+      await this.refresh();
+      await this.syncSessionActions();
+      return;
+    }
+
+    await this.updateSessionStatus(session, "saving");
+    await this.refresh();
+
+    await this.microphoneRecorder.stop();
+    await this.flushPendingChunksToSessionAudio(session.id);
+    const latest = await this.sessionsRepository.getById(session.id);
+    if (latest) {
+      await this.updateSessionStatus(latest, "active");
+    }
+    await this.refresh();
     await this.syncSessionActions();
   }
 
@@ -252,19 +284,22 @@ export class SessionsComponent {
     }
 
     if (selectedSession.inputType === "microphone") {
-      const micIsRunning = this.micRunningBySessionId.get(selectedSession.id) ?? false;
-      micButton.classList.remove("is-hidden");
+      const micIsRunning = selectedSession.status === "recording";
+      const isSaving = selectedSession.status === "saving";
+      micButton.classList.toggle("is-hidden", isSaving);
       fileButton.classList.add("is-hidden");
       newSubjectButton.classList.remove("is-hidden");
 
-      micButton.innerHTML = micIsRunning
-        ? "<i class=\"fa-solid fa-microphone-slash\" aria-hidden=\"true\"></i><span>Stop Mic</span>"
-        : "<i class=\"fa-solid fa-microphone\" aria-hidden=\"true\"></i><span>Start Mic</span>";
+      if (!isSaving) {
+        micButton.innerHTML = micIsRunning
+          ? "<i class=\"fa-solid fa-microphone-slash\" aria-hidden=\"true\"></i><span>Stop Mic</span>"
+          : "<i class=\"fa-solid fa-microphone\" aria-hidden=\"true\"></i><span>Start Mic</span>";
+      }
       return;
     }
 
     const fileIsRunning = this.fileRunningBySessionId.get(selectedSession.id) ?? false;
-    const isDecoding = this.decodingSessionIds.has(selectedSession.id);
+    const isDecoding = selectedSession.status === "decoding";
     micButton.classList.add("is-hidden");
     newSubjectButton.classList.add("is-hidden");
     fileButton.classList.toggle("is-hidden", isDecoding);
@@ -275,12 +310,37 @@ export class SessionsComponent {
     }
   }
 
-  private getSessionStatusLabel(session: TranscriptionSession): "decoding" | "active" | "finished" {
-    if (this.decodingSessionIds.has(session.id)) {
-      return "decoding";
-    }
+  private getSessionStatusLabel(session: TranscriptionSession): "decoding" | "recording" | "saving" | "error" | "active" | "finished" {
+    return session.status;
+  }
 
-    return session.endedAt === null ? "active" : "finished";
+  private async flushPendingChunksToSessionAudio(sessionId: string): Promise<void> {
+    const session = await this.sessionsRepository.getById(sessionId);
+    if (session && session.status !== "saving") {
+      await this.updateSessionStatus(session, "saving");
+    }
+    await this.refresh();
+
+    try {
+      const pending = await this.sessionPendingAudioChunksRepository.listBySessionId(sessionId);
+      if (pending.length === 0) {
+        return;
+      }
+
+      const existing = await this.sessionAudioFilesRepository.load(sessionId);
+      const mimeType = pending[0]?.mimeType || existing?.type || "audio/webm";
+      const parts: BlobPart[] = [];
+      if (existing) parts.push(existing);
+      for (const chunk of pending) {
+        parts.push(chunk.blob);
+      }
+
+      const merged = new Blob(parts, { type: mimeType });
+      await this.sessionAudioFilesRepository.save(sessionId, merged);
+      await this.sessionPendingAudioChunksRepository.deleteBySessionId(sessionId);
+    } finally {
+      await this.refresh();
+    }
   }
 
   private async getCountersBySession(sessions: TranscriptionSession[]): Promise<Map<string, SessionCounters>> {
@@ -307,6 +367,14 @@ export class SessionsComponent {
     );
 
     return new Map(entries);
+  }
+
+  private async updateSessionStatus(session: TranscriptionSession, status: SessionStatus): Promise<void> {
+    if (session.status === status) return;
+    await this.sessionsRepository.update({
+      ...session,
+      status
+    });
   }
 
   private toCounters(subjects: TranscriptionSubject[], segments: TranscriptionSegment[]): SessionCounters {
