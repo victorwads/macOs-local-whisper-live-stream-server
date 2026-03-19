@@ -626,6 +626,10 @@ button:hover { opacity: 0.9; }
     margin-top: 6px;
 }
 
+.live-transcriptions-root.hide-details .dev-detail {
+    display: none;
+}
+
 .legend-item {
     display: inline-flex;
     align-items: center;

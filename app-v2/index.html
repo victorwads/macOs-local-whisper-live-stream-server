@@ -11,13 +11,17 @@
     <h1>Live Whisper Transcription</h1>
 
     <!-- Transcription Area -->
-    <div class="card transcript-section live-transcriptions-root">
+    <div class="card transcript-section live-transcriptions-root hide-details">
       <div class="card-header card-header-row">
         <span>Live Transcription</span>
         <div class="card-header-actions">
           <label class="toggle-chip" title="Automatically keep the transcript scrolled to the bottom">
             <input class="js-auto-scroll-toggle" type="checkbox" checked>
             <span>Auto-scroll</span>
+          </label>
+          <label class="toggle-chip" title="Show technical details">
+            <input class="js-see-details-toggle" type="checkbox">
+            <span>See Details</span>
           </label>
           <button type="button" class="link-btn js-export-txt-btn">Export TXT</button>
           <button type="button" class="link-btn js-copy-last-subject-btn" aria-keyshortcuts="Control+C Meta+C">Copy Last Subject <span class="shortcut-hint">Cmd/Ctrl+C</span></button>
@@ -42,23 +46,23 @@
         <div class="pipeline-status js-pipeline-status"></div>
       </div>
       <div class="transcript-legend" aria-label="Transcript metadata legend">
-        <span class="legend-item">
+        <span class="legend-item dev-detail">
           <span class="legend-dot legend-dot-audio" aria-hidden="true"></span>
           Audio duration
         </span>
-        <span class="legend-item">
+        <span class="legend-item dev-detail">
           <span class="legend-dot legend-dot-processing" aria-hidden="true"></span>
           Final processing time
         </span>
-        <span class="legend-item">
+        <span class="legend-item dev-detail">
           <span class="legend-dot legend-dot-rate" aria-hidden="true"></span>
           Transcribe rate (audio duration / final processing time)
         </span>
-        <span class="legend-item">
+        <span class="legend-item dev-detail">
           <span class="legend-dot legend-dot-wordtime" aria-hidden="true"></span>
           Avg time per word (ms)
         </span>
-        <span class="legend-item">
+        <span class="legend-item dev-detail">
           <span class="legend-dot legend-dot-partials" aria-hidden="true"></span>
           Segments count
         </span>

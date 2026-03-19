@@ -58,12 +58,17 @@ export class SessionViewerComponent {
 
   private bindEvents(): void {
     this.autoScrollEnabled = this.binder.autoScrollToggle.checked;
+    this.updateDetailsVisibility();
 
     this.binder.autoScrollToggle.addEventListener("change", () => {
       this.autoScrollEnabled = this.binder.autoScrollToggle.checked;
       if (this.autoScrollEnabled) {
         this.scrollTranscriptToBottom();
       }
+    });
+
+    this.binder.seeDetailsToggle.addEventListener("change", () => {
+      this.updateDetailsVisibility();
     });
 
     this.binder.transcriptionBox.finalTranscript.addEventListener("click", (event) => {
@@ -194,7 +199,7 @@ export class SessionViewerComponent {
 
   private appendModelChangeSeparator(segment: TranscriptionSegment): void {
     const separator = document.createElement("div");
-    separator.className = "transcript-model-separator";
+    separator.className = "transcript-model-separator dev-detail";
 
     const leftLine = document.createElement("div");
     leftLine.className = "transcript-model-line";
@@ -252,7 +257,7 @@ export class SessionViewerComponent {
     const partialsLabel = this.formatPartialsSent(partialsSent);
 
     const audio = document.createElement("span");
-    audio.className = "transcript-meta-audio";
+    audio.className = "transcript-meta-audio dev-detail";
     if (audioLabel) {
       audio.textContent = ` ${audioLabel}`;
     }
@@ -262,25 +267,25 @@ export class SessionViewerComponent {
     text.textContent = segment.text;
 
     const processing = document.createElement("span");
-    processing.className = "transcript-meta-processing";
+    processing.className = "transcript-meta-processing dev-detail";
     if (processingLabel) {
       processing.textContent = ` ${processingLabel}`;
     }
 
     const rate = document.createElement("span");
-    rate.className = "transcript-meta-rate";
+    rate.className = "transcript-meta-rate dev-detail";
     if (rateLabel) {
       rate.textContent = ` ${rateLabel}`;
     }
 
     const avgWord = document.createElement("span");
-    avgWord.className = "transcript-meta-wordtime";
+    avgWord.className = "transcript-meta-wordtime dev-detail";
     if (avgWordLabel) {
       avgWord.textContent = ` ${avgWordLabel}`;
     }
 
     const partials = document.createElement("span");
-    partials.className = "transcript-meta-partials";
+    partials.className = "transcript-meta-partials dev-detail";
     if (partialsLabel) {
       partials.textContent = ` ${partialsLabel}`;
     }
@@ -424,5 +429,9 @@ export class SessionViewerComponent {
       .replace(/^-+|-+$/g, "");
 
     return `${normalized || "session"}-transcription.txt`;
+  }
+
+  private updateDetailsVisibility(): void {
+    this.binder.root.classList.toggle("hide-details", !this.binder.seeDetailsToggle.checked);
   }
 }

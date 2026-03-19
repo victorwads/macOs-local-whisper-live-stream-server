@@ -5,6 +5,7 @@ import { TranscriptionBoxBinder } from "./transcription-box-binder";
 export class LiveTranscriptionsBinder {
   public readonly root: HTMLElement;
   public readonly autoScrollToggle: HTMLInputElement;
+  public readonly seeDetailsToggle: HTMLInputElement;
   public readonly exportTxtButton: HTMLButtonElement;
   public readonly copyLastSubjectButton: HTMLButtonElement;
 
@@ -19,6 +20,7 @@ export class LiveTranscriptionsBinder {
   public constructor(root: HTMLElement) {
     this.root = root;
     this.autoScrollToggle = queryRequired<HTMLInputElement>(root, ".js-auto-scroll-toggle");
+    this.seeDetailsToggle = queryRequired<HTMLInputElement>(root, ".js-see-details-toggle");
     this.exportTxtButton = queryRequired<HTMLButtonElement>(root, ".js-export-txt-btn");
     this.copyLastSubjectButton = queryRequired<HTMLButtonElement>(root, ".js-copy-last-subject-btn");
 
