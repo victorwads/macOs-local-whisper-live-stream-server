@@ -10,6 +10,7 @@ interface SessionTableRowComponentOptions {
   session: TranscriptionSession;
   counters: SessionTableRowCounters;
   audioSizeLabel: string;
+  statusLabel: "decoding" | "active" | "finished";
   isSelected: boolean;
   sessionsRepository: TranscriptionSessionsRepository;
   onSelect: (sessionId: string) => void;
@@ -35,7 +36,7 @@ export class SessionTableRowComponent {
     this.root.appendChild(this.makeCell(options.audioSizeLabel));
     this.root.appendChild(this.makeCell(String(options.counters.subjects)));
     this.root.appendChild(this.makeCell(String(options.counters.segments)));
-    this.root.appendChild(this.makeCell(options.session.endedAt === null ? "active" : "finished"));
+    this.root.appendChild(this.makeStatusCell(options.statusLabel));
     this.root.appendChild(this.makeActionsCell(options.onDelete));
 
     this.root.addEventListener("click", () => {
@@ -50,6 +51,20 @@ export class SessionTableRowComponent {
   private makeCell(text: string): HTMLTableCellElement {
     const cell = document.createElement("td");
     cell.textContent = text;
+    return cell;
+  }
+
+  private makeStatusCell(status: "decoding" | "active" | "finished"): HTMLTableCellElement {
+    const cell = document.createElement("td");
+    if (status === "decoding") {
+      cell.innerHTML = "<span class=\"session-status session-status-decoding\"><i class=\"fa-solid fa-spinner fa-spin\" aria-hidden=\"true\"></i><span>decoding</span></span>";
+      return cell;
+    }
+
+    const badge = document.createElement("span");
+    badge.className = "session-status";
+    badge.textContent = status;
+    cell.appendChild(badge);
     return cell;
   }
 

@@ -126,3 +126,15 @@
 .sessions-footer-actions .is-hidden {
     display: none;
 }
+
+.session-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    text-transform: lowercase;
+}
+
+.session-status-decoding {
+    color: #1d4ed8;
+    font-weight: 600;
+}

@@ -1,5 +1,6 @@
 import type { SessionsBinder } from "./binders/sessions-binder";
 import { formatByteSize } from "../../helpers/format-byte-size";
+import { decodeAudioFileToWav } from "./helpers/decode-audio-file-to-wav";
 import type { TranscriptionSegment } from "./models/transcription-segment";
 import type { TranscriptionSession } from "./models/transcription-session";
 import type { TranscriptionSubject } from "./models/transcription-subject";
@@ -19,6 +20,7 @@ export class SessionsComponent {
   private hashChangeBound = false;
   private readonly micRunningBySessionId = new Map<string, boolean>();
   private readonly fileRunningBySessionId = new Map<string, boolean>();
+  private readonly decodingSessionIds = new Set<string>();
   private sessionsSnapshot: TranscriptionSession[] = [];
 
   public constructor(
@@ -64,6 +66,7 @@ export class SessionsComponent {
           segments: countersBySession.get(session.id)?.segments ?? 0
         },
         audioSizeLabel: audioSizeBySession.get(session.id) ?? "0 KB",
+        statusLabel: this.getSessionStatusLabel(session),
         isSelected: selectedSessionId === session.id,
         sessionsRepository: this.sessionsRepository,
         onSelect: (sessionId) => {
@@ -104,8 +107,13 @@ export class SessionsComponent {
 
   private bindEvents(): void {
     this.binder.newSessionButton.addEventListener("click", async () => {
-      await this.createAndSelectNewSession();
-      await this.refresh();
+      try {
+        await this.createAndSelectNewSession();
+        await this.refresh();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to create session.";
+        window.alert(message);
+      }
     });
 
     this.binder.micToggleButton.addEventListener("click", async () => {
@@ -158,7 +166,17 @@ export class SessionsComponent {
       sourceFileName: file.name,
       startedAt: now
     });
-    await this.sessionAudioFilesRepository.save(created.id, file);
+    this.decodingSessionIds.add(created.id);
+    this.setSessionIdToHash(created.id);
+    await this.refresh();
+
+    try {
+      const decodedAudioBlob = await decodeAudioFileToWav(file);
+      await this.sessionAudioFilesRepository.save(created.id, decodedAudioBlob);
+    } finally {
+      this.decodingSessionIds.delete(created.id);
+    }
+
     return created;
   }
 
@@ -246,12 +264,23 @@ export class SessionsComponent {
     }
 
     const fileIsRunning = this.fileRunningBySessionId.get(selectedSession.id) ?? false;
+    const isDecoding = this.decodingSessionIds.has(selectedSession.id);
     micButton.classList.add("is-hidden");
     newSubjectButton.classList.add("is-hidden");
-    fileButton.classList.remove("is-hidden");
-    fileButton.innerHTML = fileIsRunning
-      ? "<i class=\"fa-solid fa-pause\" aria-hidden=\"true\"></i><span>Pause Transcription</span>"
-      : "<i class=\"fa-solid fa-play\" aria-hidden=\"true\"></i><span>Start Transcription</span>";
+    fileButton.classList.toggle("is-hidden", isDecoding);
+    if (!isDecoding) {
+      fileButton.innerHTML = fileIsRunning
+        ? "<i class=\"fa-solid fa-pause\" aria-hidden=\"true\"></i><span>Pause Transcription</span>"
+        : "<i class=\"fa-solid fa-play\" aria-hidden=\"true\"></i><span>Start Transcription</span>";
+    }
+  }
+
+  private getSessionStatusLabel(session: TranscriptionSession): "decoding" | "active" | "finished" {
+    if (this.decodingSessionIds.has(session.id)) {
+      return "decoding";
+    }
+
+    return session.endedAt === null ? "active" : "finished";
   }
 
   private async getCountersBySession(sessions: TranscriptionSession[]): Promise<Map<string, SessionCounters>> {
