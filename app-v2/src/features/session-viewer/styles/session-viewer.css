@@ -318,6 +318,38 @@
     text-decoration: underline;
 }
 
+.transcript-subject-delete-btn {
+    border: none;
+    background: transparent;
+    color: #9f1239;
+    opacity: 0;
+    cursor: pointer;
+    padding: 0;
+    transition: opacity 120ms ease-in-out;
+}
+
+.transcript-subject-edit-btn {
+    border: none;
+    background: transparent;
+    color: #475569;
+    opacity: 0;
+    cursor: pointer;
+    padding: 0;
+    transition: opacity 120ms ease-in-out;
+}
+
+.transcript-lap-separator:hover .transcript-subject-delete-btn,
+.transcript-lap-separator:hover .transcript-subject-edit-btn,
+.transcript-subject-edit-btn:focus-visible,
+.transcript-subject-delete-btn:focus-visible {
+    opacity: 1;
+}
+
+.transcript-subject-inline-edit-input {
+    min-width: 260px;
+    max-width: 520px;
+}
+
 .transcript-lap-line {
     height: 1px;
     background: #93c5fd;
@@ -483,6 +515,11 @@
 .segment-editor-btn.is-save {
     background: #dcfce7;
     color: #166534;
+}
+
+.segment-editor-btn.is-subject {
+    background: #dbeafe;
+    color: #1d4ed8;
 }
 
 .live-transcriptions-root.hide-details .dev-detail {

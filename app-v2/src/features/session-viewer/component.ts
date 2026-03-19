@@ -112,6 +112,16 @@ export class SessionViewerComponent {
         onRequestCopySubject: (text) => {
           void this.copyToClipboard(text);
         },
+        onRequestSaveSubject: async (updatedSubject) => {
+          await this.subjectsRepository.update(updatedSubject);
+          await this.refresh();
+        },
+        onRequestDeleteSubject: async (subjectSegment) => {
+          await this.deleteSubjectFromSegment(subjectSegment);
+        },
+        onRequestCreateSubjectAbove: async (targetSegment) => {
+          await this.createSubjectAboveSegment(targetSegment);
+        },
         onRequestSelectLine: (lineElement) => {
           this.selectTranscriptLine(lineElement);
         },
@@ -211,5 +221,123 @@ export class SessionViewerComponent {
 
   private updateDetailsVisibility(): void {
     this.binder.root.classList.toggle("hide-details", !this.binder.seeDetailsToggle.checked);
+  }
+
+  private async createSubjectAboveSegment(targetSegment: TranscriptionSegment): Promise<void> {
+    const session = this.state.currentSession;
+    if (!session) return;
+
+    const ordered = [...this.state.segments].sort((a, b) => a.orderIndex - b.orderIndex);
+    const targetIndex = ordered.findIndex((segment) => segment.id === targetSegment.id);
+    if (targetIndex < 0) return;
+
+    const target = ordered[targetIndex];
+    if (target.type === "subject") {
+      window.alert("Cannot create a subject above another subject.");
+      return;
+    }
+
+    const previous = targetIndex > 0 ? ordered[targetIndex - 1] : null;
+    if (previous?.type === "subject") {
+      window.alert("Cannot create a subject here because the previous item is already a subject.");
+      return;
+    }
+
+    const orderIndex = previous ? previous.orderIndex + 0.5 : Math.max(0.5, target.orderIndex - 0.5);
+    const orderConflict = ordered.some((segment) => segment.orderIndex === orderIndex);
+    if (orderConflict) {
+      window.alert("Cannot create subject here due to order conflict. Please retry.");
+      return;
+    }
+
+    const now = Date.now();
+    const createdSubject = await this.subjectsRepository.create({
+      sessionId: session.id,
+      name: "New Subject",
+      orderIndex,
+      createdAt: now
+    });
+
+    await this.segmentsRepository.create({
+      sessionId: session.id,
+      subjectId: createdSubject.id,
+      orderIndex,
+      type: "subject",
+      text: `Subject marker: ${createdSubject.name}`,
+      startMs: target.startMs,
+      endMs: target.startMs,
+      status: "final",
+      createdAt: now
+    });
+
+    const nextSubject = ordered
+      .slice(targetIndex + 1)
+      .find((segment) => segment.type === "subject");
+    const nextSubjectOrder = nextSubject?.orderIndex ?? Number.POSITIVE_INFINITY;
+
+    const toMove = ordered.filter((segment) => (
+      segment.type !== "subject" &&
+      segment.orderIndex >= target.orderIndex &&
+      segment.orderIndex < nextSubjectOrder
+    ));
+
+    await Promise.all(
+      toMove.map(async (segment) => {
+        await this.segmentsRepository.update({
+          ...segment,
+          subjectId: createdSubject.id
+        });
+      })
+    );
+
+    await this.refresh();
+  }
+
+  private async deleteSubjectFromSegment(subjectSegment: TranscriptionSegment): Promise<void> {
+    const session = this.state.currentSession;
+    if (!session) return;
+
+    if (subjectSegment.type !== "subject") {
+      window.alert("Only subject rows can be deleted.");
+      return;
+    }
+
+    const subjectId = subjectSegment.subjectId;
+    if (!subjectId) {
+      window.alert("Subject marker is missing subject reference.");
+      return;
+    }
+
+    const ordered = [...this.state.segments].sort((a, b) => a.orderIndex - b.orderIndex);
+    const markerIndex = ordered.findIndex((segment) => segment.id === subjectSegment.id);
+    if (markerIndex < 0) return;
+
+    const previousMarker = [...ordered]
+      .slice(0, markerIndex)
+      .reverse()
+      .find((segment) => segment.type === "subject");
+    const nextMarker = ordered
+      .slice(markerIndex + 1)
+      .find((segment) => segment.type === "subject");
+    const nextMarkerOrder = nextMarker?.orderIndex ?? Number.POSITIVE_INFINITY;
+
+    const affectedSegments = ordered.filter((segment) => (
+      segment.type !== "subject" &&
+      segment.orderIndex > subjectSegment.orderIndex &&
+      segment.orderIndex < nextMarkerOrder
+    ));
+
+    await Promise.all(
+      affectedSegments.map(async (segment) => {
+        await this.segmentsRepository.update({
+          ...segment,
+          subjectId: previousMarker?.subjectId
+        });
+      })
+    );
+
+    await this.segmentsRepository.delete(subjectSegment.id);
+    await this.subjectsRepository.delete(subjectId);
+    await this.refresh();
   }
 }

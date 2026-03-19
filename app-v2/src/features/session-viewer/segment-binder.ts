@@ -14,6 +14,14 @@ interface TimelineRowOptions {
   onReTranscribe: () => Promise<void>;
 }
 
+interface SubjectRowOptions {
+  segment: TranscriptionSegment;
+  subject: TranscriptionSubject | null;
+  onCopy: (text: string) => void;
+  onEdit: () => void;
+  onDelete: () => Promise<void>;
+}
+
 export class SessionViewerSegmentBinder {
   public readonly root: HTMLElement;
   public readonly extraElements: HTMLElement[];
@@ -21,32 +29,34 @@ export class SessionViewerSegmentBinder {
   public readonly lineElement: HTMLDivElement | null;
   public readonly textElement: HTMLSpanElement | null;
   public readonly editButtonElement: HTMLButtonElement | null;
+  public readonly deleteButtonElement: HTMLButtonElement | null;
+  public readonly subjectCenterElement: HTMLDivElement | null;
 
   private constructor(
     root: HTMLElement,
     extraElements: HTMLElement[],
     lineElement: HTMLDivElement | null,
     textElement: HTMLSpanElement | null,
-    editButtonElement: HTMLButtonElement | null
+    editButtonElement: HTMLButtonElement | null,
+    deleteButtonElement: HTMLButtonElement | null,
+    subjectCenterElement: HTMLDivElement | null
   ) {
     this.root = root;
     this.extraElements = extraElements;
     this.lineElement = lineElement;
     this.textElement = textElement;
     this.editButtonElement = editButtonElement;
+    this.deleteButtonElement = deleteButtonElement;
+    this.subjectCenterElement = subjectCenterElement;
   }
 
-  public static createSubject(
-    segment: TranscriptionSegment,
-    subject: TranscriptionSubject | null,
-    onCopy: (text: string) => void
-  ): SessionViewerSegmentBinder {
+  public static createSubject(options: SubjectRowOptions): SessionViewerSegmentBinder {
     const separator = document.createElement("div");
     separator.className = "transcript-lap-separator";
-    separator.dataset.lapId = segment.subjectId ?? "";
+    separator.dataset.lapId = options.segment.subjectId ?? "";
     separator.title = "Click to copy this subject";
 
-    const subjectText = subject?.name?.trim() || segment.text.trim() || "New Subject";
+    const subjectText = options.subject?.name?.trim() || options.segment.text.trim() || "New Subject";
 
     const leftLine = document.createElement("div");
     leftLine.className = "transcript-lap-line";
@@ -56,18 +66,47 @@ export class SessionViewerSegmentBinder {
 
     const center = document.createElement("div");
     center.className = "transcript-lap-center";
-    center.innerHTML = `<i class="fa-solid fa-bookmark" aria-hidden="true"></i> ${formatRelativeTimeFromMs(segment.startMs)} • ${subjectText}`;
+    center.innerHTML = `<i class="fa-solid fa-bookmark" aria-hidden="true"></i> ${formatRelativeTimeFromMs(options.segment.startMs)} • ${subjectText}`;
     center.addEventListener("click", (event) => {
       event.stopPropagation();
-      onCopy(subjectText);
+      options.onCopy(subjectText);
+    });
+    center.title = "Double click to edit subject";
+    center.addEventListener("dblclick", (event) => {
+      event.stopPropagation();
+      options.onEdit();
+    });
+
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.className = "transcript-subject-edit-btn";
+    editButton.title = "Edit subject";
+    editButton.setAttribute("aria-label", "Edit subject");
+    editButton.innerHTML = "<i class=\"fa-solid fa-pen\" aria-hidden=\"true\"></i>";
+    editButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      options.onEdit();
+    });
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "transcript-subject-delete-btn";
+    deleteButton.title = "Delete subject";
+    deleteButton.setAttribute("aria-label", "Delete subject");
+    deleteButton.innerHTML = "<i class=\"fa-solid fa-trash\" aria-hidden=\"true\"></i>";
+    deleteButton.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      await options.onDelete();
     });
 
     separator.appendChild(leftLine);
     separator.appendChild(center);
     separator.appendChild(rightLine);
+    separator.appendChild(editButton);
+    separator.appendChild(deleteButton);
 
     const extraElements: HTMLElement[] = [];
-    const hint = segment.processing?.lastMessage?.trim();
+    const hint = options.segment.processing?.lastMessage?.trim();
     if (hint) {
       const hintElement = document.createElement("div");
       hintElement.className = "transcript-lap-hint";
@@ -75,7 +114,7 @@ export class SessionViewerSegmentBinder {
       extraElements.push(hintElement);
     }
 
-    return new SessionViewerSegmentBinder(separator, extraElements, null, null, null);
+    return new SessionViewerSegmentBinder(separator, extraElements, null, null, editButton, deleteButton, center);
   }
 
   public static createModelChange(segment: TranscriptionSegment): SessionViewerSegmentBinder {
@@ -96,7 +135,7 @@ export class SessionViewerSegmentBinder {
     separator.appendChild(center);
     separator.appendChild(rightLine);
 
-    return new SessionViewerSegmentBinder(separator, [], null, null, null);
+    return new SessionViewerSegmentBinder(separator, [], null, null, null, null, null);
   }
 
   public static createTimeline(options: TimelineRowOptions): SessionViewerSegmentBinder {
@@ -169,7 +208,7 @@ export class SessionViewerSegmentBinder {
     if (options.avgWordLabel) line.appendChild(this.makeMeta("transcript-meta-wordtime dev-detail", options.avgWordLabel));
     if (options.partialsLabel) line.appendChild(this.makeMeta("transcript-meta-partials dev-detail", options.partialsLabel));
 
-    return new SessionViewerSegmentBinder(line, [], line, text, editButton);
+    return new SessionViewerSegmentBinder(line, [], line, text, editButton, null, null);
   }
 
   private static makeMeta(className: string, label: string): HTMLSpanElement {

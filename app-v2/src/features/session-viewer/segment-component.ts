@@ -11,6 +11,9 @@ interface SessionViewerSegmentComponentOptions {
   segment: TranscriptionSegment;
   subject: TranscriptionSubject | null;
   onRequestCopySubject: (text: string) => void;
+  onRequestSaveSubject: (subject: TranscriptionSubject) => Promise<void>;
+  onRequestDeleteSubject: (segment: TranscriptionSegment) => Promise<void>;
+  onRequestCreateSubjectAbove: (segment: TranscriptionSegment) => Promise<void>;
   onRequestSaveSegment: (segment: TranscriptionSegment) => Promise<void>;
   onRequestSelectLine: (lineElement: HTMLElement) => void;
   onRequestScroll: () => void;
@@ -24,6 +27,9 @@ export class SessionViewerSegmentComponent {
   private readonly segment: TranscriptionSegment;
   private readonly subject: TranscriptionSubject | null;
   private readonly onRequestCopySubject: (text: string) => void;
+  private readonly onRequestSaveSubject: (subject: TranscriptionSubject) => Promise<void>;
+  private readonly onRequestDeleteSubject: (segment: TranscriptionSegment) => Promise<void>;
+  private readonly onRequestCreateSubjectAbove: (segment: TranscriptionSegment) => Promise<void>;
   private readonly onRequestSaveSegment: (segment: TranscriptionSegment) => Promise<void>;
   private readonly onRequestSelectLine: (lineElement: HTMLElement) => void;
   private readonly onRequestScroll: () => void;
@@ -37,11 +43,16 @@ export class SessionViewerSegmentComponent {
   private inlineTextInput: HTMLInputElement | null = null;
   private textElement: HTMLSpanElement | null = null;
   private editButtonElement: HTMLButtonElement | null = null;
+  private subjectCenterElement: HTMLDivElement | null = null;
+  private subjectInlineInput: HTMLInputElement | null = null;
 
   public constructor(options: SessionViewerSegmentComponentOptions) {
     this.segment = options.segment;
     this.subject = options.subject;
     this.onRequestCopySubject = options.onRequestCopySubject;
+    this.onRequestSaveSubject = options.onRequestSaveSubject;
+    this.onRequestDeleteSubject = options.onRequestDeleteSubject;
+    this.onRequestCreateSubjectAbove = options.onRequestCreateSubjectAbove;
     this.onRequestSaveSegment = options.onRequestSaveSegment;
     this.onRequestSelectLine = options.onRequestSelectLine;
     this.onRequestScroll = options.onRequestScroll;
@@ -53,11 +64,22 @@ export class SessionViewerSegmentComponent {
     this.lineElement = this.binder.lineElement;
     this.textElement = this.binder.textElement;
     this.editButtonElement = this.binder.editButtonElement;
+    this.subjectCenterElement = this.binder.subjectCenterElement;
   }
 
   private build(): SessionViewerSegmentBinder {
     if (this.segment.type === "subject") {
-      return SessionViewerSegmentBinder.createSubject(this.segment, this.subject, this.onRequestCopySubject);
+      return SessionViewerSegmentBinder.createSubject({
+        segment: this.segment,
+        subject: this.subject,
+        onCopy: this.onRequestCopySubject,
+        onEdit: () => {
+          this.enterSubjectEditMode();
+        },
+        onDelete: async () => {
+          await this.onRequestDeleteSubject(this.segment);
+        }
+      });
     }
 
     if (this.segment.type === "model_change") {
@@ -65,6 +87,62 @@ export class SessionViewerSegmentComponent {
     }
 
     return this.createTimelineBinder();
+  }
+
+  private enterSubjectEditMode(): void {
+    if (this.segment.type !== "subject") return;
+    if (!this.subjectCenterElement || !this.subject) return;
+    if (this.subjectInlineInput) return;
+
+    const currentName = this.subject.name.trim() || "New Subject";
+    this.subjectCenterElement.style.display = "none";
+    if (this.editButtonElement) this.editButtonElement.style.display = "none";
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "transcript-inline-edit-input transcript-subject-inline-edit-input";
+    input.value = currentName;
+    input.addEventListener("click", (event) => event.stopPropagation());
+
+    let committed = false;
+    const commit = async () => {
+      if (committed) return;
+      committed = true;
+      const nextName = input.value.trim() || "New Subject";
+      if (nextName !== currentName) {
+        await this.onRequestSaveSubject({
+          ...this.subject!,
+          name: nextName
+        });
+      } else {
+        this.subjectCenterElement!.style.display = "";
+        if (this.editButtonElement) this.editButtonElement.style.display = "";
+        input.remove();
+        this.subjectInlineInput = null;
+      }
+    };
+
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        void commit();
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this.subjectCenterElement!.style.display = "";
+        if (this.editButtonElement) this.editButtonElement.style.display = "";
+        input.remove();
+        this.subjectInlineInput = null;
+      }
+    });
+    input.addEventListener("blur", () => {
+      void commit();
+    });
+
+    this.subjectCenterElement.insertAdjacentElement("afterend", input);
+    this.subjectInlineInput = input;
+    input.focus();
+    input.select();
   }
 
   private resetDraft(): void {
@@ -219,7 +297,18 @@ export class SessionViewerSegmentComponent {
       await this.saveEditMode();
     });
 
+    const createSubjectAboveButton = document.createElement("button");
+    createSubjectAboveButton.type = "button";
+    createSubjectAboveButton.className = "segment-editor-btn is-subject";
+    createSubjectAboveButton.setAttribute("aria-label", "Create subject above");
+    createSubjectAboveButton.title = "Create subject above this segment";
+    createSubjectAboveButton.innerHTML = "<i class=\"fa-solid fa-arrow-up\" aria-hidden=\"true\"></i>";
+    createSubjectAboveButton.addEventListener("click", async () => {
+      await this.onRequestCreateSubjectAbove(this.segment);
+    });
+
     actions.appendChild(cancelButton);
+    actions.appendChild(createSubjectAboveButton);
     actions.appendChild(saveButton);
 
     editor.appendChild(timesRow);
