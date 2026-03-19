@@ -29,6 +29,14 @@
     overflow-x: auto;
 }
 
+.sessions-footer-actions {
+    margin-top: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
 .sessions-table {
     width: 100%;
     border-collapse: collapse;
@@ -113,4 +121,8 @@
 .sessions-table tbody tr:hover .session-row-delete-btn,
 .session-row-delete-btn:focus-visible {
     opacity: 1;
+}
+
+.sessions-footer-actions .is-hidden {
+    display: none;
 }

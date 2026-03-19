@@ -37,6 +37,21 @@
           <tbody class="js-sessions-table-body"></tbody>
         </table>
       </div>
+      <div class="sessions-footer-actions">
+        <button type="button" class="sessions-action-chip js-session-mic-toggle-btn">
+          <i class="fa-solid fa-microphone" aria-hidden="true"></i>
+          <span>Start Mic</span>
+        </button>
+        <button type="button" class="sessions-action-chip js-session-file-toggle-btn">
+          <i class="fa-solid fa-play" aria-hidden="true"></i>
+          <span>Start Transcription</span>
+        </button>
+        <button type="button" class="sessions-action-chip js-session-new-subject-btn">
+          <i class="fa-solid fa-bookmark" aria-hidden="true"></i>
+          <span>New Subject</span>
+        </button>
+        <input class="js-session-audio-file-input" type="file" accept=".mp3,.wav,.m4a,.aac,.ogg,audio/*" hidden>
+      </div>
     </div>
 
     <!-- Transcription Area -->
@@ -111,15 +126,8 @@
       </div>
     </div>
 
-    <div class="card controls-root">
-      <div class="button-group controls-actions">
-        <button class="js-control-start" type="button" aria-keyshortcuts="Shift+S"><i class="fa-solid fa-microphone"></i> Start Mic <span class="shortcut-hint">Shift+S</span></button>
-        <button class="js-control-process-file" type="button">Process File</button>
-        <input class="js-control-audio-file-input" type="file" accept=".mp3,.wav,.m4a,.aac,.ogg,audio/*" style="display:none">
-        <button class="js-control-new-subject" type="button" aria-keyshortcuts="Shift+L">New Subject <span class="shortcut-hint">Shift+L</span></button>
-        <button class="js-control-stop" type="button" aria-keyshortcuts="Shift+X">Stop <span class="shortcut-hint">Shift+X</span></button>
-      </div>
-
+    <details class="card controls-root controls-card" open>
+      <summary class="card-header">Configs</summary>
       <div class="control-sections">
         <details class="config-box config-family config-collapsible js-model-configs">
           <summary class="config-box-header">
@@ -267,7 +275,7 @@
           <div class="js-status-text">Idle.</div>
         </details>
       </div>
-    </div>
+    </details>
 
     <!-- Logs -->
     <div class="card system-logs-root">

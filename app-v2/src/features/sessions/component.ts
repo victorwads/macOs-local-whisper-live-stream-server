@@ -17,6 +17,9 @@ interface SessionCounters {
 export class SessionsComponent {
   private readonly hashChangeListeners = new Set<() => void>();
   private hashChangeBound = false;
+  private readonly micRunningBySessionId = new Map<string, boolean>();
+  private readonly fileRunningBySessionId = new Map<string, boolean>();
+  private sessionsSnapshot: TranscriptionSession[] = [];
 
   public constructor(
     public readonly binder: SessionsBinder,
@@ -40,12 +43,14 @@ export class SessionsComponent {
         listener();
       }
       this.highlightSelectedRow();
+      void this.syncSessionActions();
     });
     this.hashChangeBound = true;
   }
 
   public async refresh(): Promise<void> {
     const sessions = await this.sessionsRepository.getAll();
+    this.sessionsSnapshot = sessions;
     const countersBySession = await this.getCountersBySession(sessions);
     const audioSizeBySession = await this.getAudioSizeBySession(sessions);
     const selectedSessionId = this.getSessionIdFromHash();
@@ -76,6 +81,8 @@ export class SessionsComponent {
     if (sessions.length > 0 && !selectedSessionId) {
       this.setSessionIdToHash(sessions[0].id);
     }
+
+    await this.syncSessionActions();
   }
 
   public async resolveCurrentSession(): Promise<TranscriptionSession | null> {
@@ -100,18 +107,151 @@ export class SessionsComponent {
       await this.createAndSelectNewSession();
       await this.refresh();
     });
+
+    this.binder.micToggleButton.addEventListener("click", async () => {
+      await this.handleMicToggle();
+    });
+
+    this.binder.fileToggleButton.addEventListener("click", async () => {
+      await this.handleFileTranscriptionToggle();
+    });
+
+    this.binder.newSubjectButton.addEventListener("click", async () => {
+      await this.handleCreateSubject();
+    });
   }
 
-  private async createAndSelectNewSession(): Promise<TranscriptionSession> {
+  private async createAndSelectNewSession(): Promise<TranscriptionSession | null> {
+    const mode = this.promptNewSessionInputType();
+    if (!mode) return null;
+
+    if (mode === "microphone") {
+      const createdMicSession = await this.createNewMicrophoneSession();
+      this.micRunningBySessionId.set(createdMicSession.id, false);
+      this.setSessionIdToHash(createdMicSession.id);
+      return createdMicSession;
+    }
+
+    const file = await this.pickAudioFile();
+    if (!file) return null;
+
+    const createdFileSession = await this.createNewFileSession(file);
+    this.fileRunningBySessionId.set(createdFileSession.id, false);
+    this.setSessionIdToHash(createdFileSession.id);
+    return createdFileSession;
+  }
+
+  private async createNewMicrophoneSession(): Promise<TranscriptionSession> {
     const now = Date.now();
-    const created = await this.sessionsRepository.create({
+    return this.sessionsRepository.create({
       inputType: "microphone",
       sourceFileName: "mic-" + String(now) + ".wav",
       startedAt: now
     });
+  }
 
-    this.setSessionIdToHash(created.id);
+  private async createNewFileSession(file: File): Promise<TranscriptionSession> {
+    const now = Date.now();
+    const created = await this.sessionsRepository.create({
+      name: file.name,
+      inputType: "file",
+      sourceFileName: file.name,
+      startedAt: now
+    });
+    await this.sessionAudioFilesRepository.save(created.id, file);
     return created;
+  }
+
+  private promptNewSessionInputType(): "microphone" | "file" | null {
+    const raw = window.prompt(
+      "New session input type: microphone or file",
+      "microphone"
+    );
+    if (!raw) return null;
+
+    const normalized = raw.trim().toLowerCase();
+    if (normalized === "microphone" || normalized === "mic") return "microphone";
+    if (normalized === "file" || normalized === "audio") return "file";
+
+    window.alert("Invalid input type. Use: microphone or file.");
+    return null;
+  }
+
+  private async pickAudioFile(): Promise<File | null> {
+    const input = this.binder.audioFileInput;
+    input.value = "";
+
+    return new Promise((resolve) => {
+      const onChange = () => {
+        input.removeEventListener("change", onChange);
+        const file = input.files?.[0] ?? null;
+        resolve(file);
+      };
+
+      input.addEventListener("change", onChange, { once: true });
+      input.click();
+    });
+  }
+
+  private async handleMicToggle(): Promise<void> {
+    const session = await this.resolveCurrentSession();
+    if (!session || session.inputType !== "microphone") return;
+
+    const running = this.micRunningBySessionId.get(session.id) ?? false;
+    this.micRunningBySessionId.set(session.id, !running);
+    await this.syncSessionActions();
+  }
+
+  private async handleFileTranscriptionToggle(): Promise<void> {
+    const session = await this.resolveCurrentSession();
+    if (!session || session.inputType !== "file") return;
+
+    const running = this.fileRunningBySessionId.get(session.id) ?? false;
+    this.fileRunningBySessionId.set(session.id, !running);
+    await this.syncSessionActions();
+  }
+
+  private async handleCreateSubject(): Promise<void> {
+    const session = await this.resolveCurrentSession();
+    if (!session || session.inputType !== "microphone") return;
+
+    await this.subjectsRepository.createNewSubject(session.id);
+    await this.refresh();
+  }
+
+  private async syncSessionActions(): Promise<void> {
+    const selectedSession = await this.resolveCurrentSession();
+
+    const micButton = this.binder.micToggleButton;
+    const fileButton = this.binder.fileToggleButton;
+    const newSubjectButton = this.binder.newSubjectButton;
+
+    if (!selectedSession) {
+      micButton.classList.add("is-hidden");
+      fileButton.classList.add("is-hidden");
+      newSubjectButton.classList.add("is-hidden");
+      return;
+    }
+
+    if (selectedSession.inputType === "microphone") {
+      const micIsRunning = this.micRunningBySessionId.get(selectedSession.id) ?? false;
+      micButton.classList.remove("is-hidden");
+      fileButton.classList.add("is-hidden");
+      newSubjectButton.classList.remove("is-hidden");
+
+      micButton.innerHTML = micIsRunning
+        ? "<i class=\"fa-solid fa-microphone-slash\" aria-hidden=\"true\"></i><span>Stop Mic</span>"
+        : "<i class=\"fa-solid fa-microphone\" aria-hidden=\"true\"></i><span>Start Mic</span>";
+      return;
+    }
+
+    const fileIsRunning = this.fileRunningBySessionId.get(selectedSession.id) ?? false;
+    micButton.classList.add("is-hidden");
+    newSubjectButton.classList.add("is-hidden");
+    fileButton.classList.remove("is-hidden");
+    fileButton.innerHTML = fileIsRunning
+      ? "<i class=\"fa-solid fa-pause\" aria-hidden=\"true\"></i><span>Pause Transcription</span>"
+      : "<i class=\"fa-solid fa-play\" aria-hidden=\"true\"></i><span>Start Transcription</span>";
   }
 
   private async getCountersBySession(sessions: TranscriptionSession[]): Promise<Map<string, SessionCounters>> {
