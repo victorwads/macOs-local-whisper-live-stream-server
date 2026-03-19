@@ -3,6 +3,18 @@ import type {
   CreateTranscriptionSessionInput,
   TranscriptionSession
 } from "../models/transcription-session";
+import {
+  CacheStorageSessionAudioFilesRepository,
+  type SessionAudioFilesRepository
+} from "./session-audio-files-repository";
+import {
+  IndexedDbTranscriptionSegmentsRepository,
+  type TranscriptionSegmentsRepository
+} from "./transcription-segments-repository";
+import {
+  IndexedDbTranscriptionSubjectsRepository,
+  type TranscriptionSubjectsRepository
+} from "./transcription-subjects-repository";
 
 export interface TranscriptionSessionsRepository {
   create(input: CreateTranscriptionSessionInput): Promise<TranscriptionSession>;
@@ -20,6 +32,12 @@ function sortByStartedAtDesc(sessions: TranscriptionSession[]): TranscriptionSes
 }
 
 export class IndexedDbTranscriptionSessionsRepository implements TranscriptionSessionsRepository {
+  public constructor(
+    private readonly subjectsRepository: TranscriptionSubjectsRepository = new IndexedDbTranscriptionSubjectsRepository(),
+    private readonly segmentsRepository: TranscriptionSegmentsRepository = new IndexedDbTranscriptionSegmentsRepository(),
+    private readonly sessionAudioFilesRepository: SessionAudioFilesRepository = new CacheStorageSessionAudioFilesRepository()
+  ) {}
+
   public async create(input: CreateTranscriptionSessionInput): Promise<TranscriptionSession> {
     const now = input.startedAt ?? Date.now();
 
@@ -79,6 +97,9 @@ export class IndexedDbTranscriptionSessionsRepository implements TranscriptionSe
   }
 
   public async delete(id: string): Promise<void> {
+    await this.segmentsRepository.deleteBySessionId(id);
+    await this.subjectsRepository.deleteBySessionId(id);
+    await this.sessionAudioFilesRepository.delete(id);
     await sessionsDb.transcription_sessions.delete(id);
   }
 }

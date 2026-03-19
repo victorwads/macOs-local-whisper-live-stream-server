@@ -9,6 +9,7 @@ export interface TranscriptionSubjectsRepository {
   createNewSubject(sessionId: string, name?: string): Promise<TranscriptionSubject>;
   getById(id: string): Promise<TranscriptionSubject | null>;
   listBySessionId(sessionId: string): Promise<TranscriptionSubject[]>;
+  deleteBySessionId(sessionId: string): Promise<void>;
   update(subject: TranscriptionSubject): Promise<TranscriptionSubject>;
   delete(id: string): Promise<void>;
 }
@@ -61,6 +62,13 @@ export class IndexedDbTranscriptionSubjectsRepository implements TranscriptionSu
 
     await sessionsDb.transcription_subjects.put(updated);
     return updated;
+  }
+
+  public async deleteBySessionId(sessionId: string): Promise<void> {
+    await sessionsDb.transcription_subjects
+      .where("sessionId")
+      .equals(sessionId)
+      .delete();
   }
 
   public async delete(id: string): Promise<void> {

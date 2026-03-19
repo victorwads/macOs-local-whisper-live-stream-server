@@ -1,7 +1,9 @@
 import type { SessionsBinder } from "./binders/sessions-binder";
+import { formatByteSize } from "../../helpers/format-byte-size";
 import type { TranscriptionSegment } from "./models/transcription-segment";
 import type { TranscriptionSession } from "./models/transcription-session";
 import type { TranscriptionSubject } from "./models/transcription-subject";
+import type { SessionAudioFilesRepository } from "./repositories/session-audio-files-repository";
 import type { TranscriptionSegmentsRepository } from "./repositories/transcription-segments-repository";
 import type { TranscriptionSessionsRepository } from "./repositories/transcription-sessions-repository";
 import type { TranscriptionSubjectsRepository } from "./repositories/transcription-subjects-repository";
@@ -20,7 +22,8 @@ export class SessionsComponent {
     public readonly binder: SessionsBinder,
     private readonly sessionsRepository: TranscriptionSessionsRepository,
     private readonly subjectsRepository: TranscriptionSubjectsRepository,
-    private readonly segmentsRepository: TranscriptionSegmentsRepository
+    private readonly segmentsRepository: TranscriptionSegmentsRepository,
+    private readonly sessionAudioFilesRepository: SessionAudioFilesRepository
   ) {}
 
   public async initialize(): Promise<void> {
@@ -44,6 +47,7 @@ export class SessionsComponent {
   public async refresh(): Promise<void> {
     const sessions = await this.sessionsRepository.getAll();
     const countersBySession = await this.getCountersBySession(sessions);
+    const audioSizeBySession = await this.getAudioSizeBySession(sessions);
     const selectedSessionId = this.getSessionIdFromHash();
 
     this.binder.tableBody.innerHTML = "";
@@ -54,10 +58,15 @@ export class SessionsComponent {
           subjects: countersBySession.get(session.id)?.subjects ?? 0,
           segments: countersBySession.get(session.id)?.segments ?? 0
         },
+        audioSizeLabel: audioSizeBySession.get(session.id) ?? "0 KB",
         isSelected: selectedSessionId === session.id,
         sessionsRepository: this.sessionsRepository,
         onSelect: (sessionId) => {
           this.setSessionIdToHash(sessionId);
+        },
+        onDelete: async (sessionId) => {
+          await this.sessionsRepository.delete(sessionId);
+          await this.refresh();
         }
       });
 
@@ -114,6 +123,17 @@ export class SessionsComponent {
         ]);
 
         return [session.id, this.toCounters(subjects, segments)] as const;
+      })
+    );
+
+    return new Map(entries);
+  }
+
+  private async getAudioSizeBySession(sessions: TranscriptionSession[]): Promise<Map<string, string>> {
+    const entries = await Promise.all(
+      sessions.map(async (session) => {
+        const audioBlob = await this.sessionAudioFilesRepository.load(session.id);
+        return [session.id, audioBlob ? formatByteSize(audioBlob.size) : "0 KB"] as const;
       })
     );
 

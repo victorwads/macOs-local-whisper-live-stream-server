@@ -8,6 +8,7 @@ import {
 } from "./features/backends";
 import { SessionViewerComponent } from "./features/session-viewer";
 import {
+  CacheStorageSessionAudioFilesRepository,
   IndexedDbTranscriptionSegmentsRepository,
   IndexedDbTranscriptionSessionsRepository,
   IndexedDbTranscriptionSubjectsRepository,
@@ -48,15 +49,21 @@ export class AppController {
       modelConfigsRepository
     );
 
-    const sessionsRepository = new IndexedDbTranscriptionSessionsRepository();
     const subjectsRepository = new IndexedDbTranscriptionSubjectsRepository();
     const segmentsRepository = new IndexedDbTranscriptionSegmentsRepository();
+    const sessionAudioFilesRepository = new CacheStorageSessionAudioFilesRepository();
+    const sessionsRepository = new IndexedDbTranscriptionSessionsRepository(
+      subjectsRepository,
+      segmentsRepository,
+      sessionAudioFilesRepository
+    );
 
     this.sessionsComponent = new SessionsComponent(
       this.binders.sessions,
       sessionsRepository,
       subjectsRepository,
-      segmentsRepository
+      segmentsRepository,
+      sessionAudioFilesRepository
     );
 
     this.sessionViewerComponent = new SessionViewerComponent(

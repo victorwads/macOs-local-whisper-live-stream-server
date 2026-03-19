@@ -7,6 +7,7 @@ export * from "./models/transcription-segment";
 export * from "./repositories/transcription-sessions-repository";
 export * from "./repositories/transcription-subjects-repository";
 export * from "./repositories/transcription-segments-repository";
+export * from "./repositories/session-audio-files-repository";
 export * from "./binders/sessions-binder";
 export * from "./component";
 export * from "./session-table-row-component";

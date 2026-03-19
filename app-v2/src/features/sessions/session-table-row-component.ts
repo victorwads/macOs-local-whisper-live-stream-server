@@ -9,9 +9,11 @@ export interface SessionTableRowCounters {
 interface SessionTableRowComponentOptions {
   session: TranscriptionSession;
   counters: SessionTableRowCounters;
+  audioSizeLabel: string;
   isSelected: boolean;
   sessionsRepository: TranscriptionSessionsRepository;
   onSelect: (sessionId: string) => void;
+  onDelete: (sessionId: string) => Promise<void>;
 }
 
 export class SessionTableRowComponent {
@@ -30,9 +32,11 @@ export class SessionTableRowComponent {
     this.root.appendChild(this.makeNameCell());
     this.root.appendChild(this.makeCell(options.session.inputType));
     this.root.appendChild(this.makeCell(new Date(options.session.startedAt).toLocaleString()));
+    this.root.appendChild(this.makeCell(options.audioSizeLabel));
     this.root.appendChild(this.makeCell(String(options.counters.subjects)));
     this.root.appendChild(this.makeCell(String(options.counters.segments)));
     this.root.appendChild(this.makeCell(options.session.endedAt === null ? "active" : "finished"));
+    this.root.appendChild(this.makeActionsCell(options.onDelete));
 
     this.root.addEventListener("click", () => {
       options.onSelect(options.session.id);
@@ -79,6 +83,25 @@ export class SessionTableRowComponent {
     wrap.appendChild(editButton);
     cell.appendChild(wrap);
 
+    return cell;
+  }
+
+  private makeActionsCell(onDelete: (sessionId: string) => Promise<void>): HTMLTableCellElement {
+    const cell = document.createElement("td");
+    cell.className = "session-actions-cell";
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "session-row-delete-btn";
+    deleteButton.title = "Delete session";
+    deleteButton.setAttribute("aria-label", "Delete session");
+    deleteButton.innerHTML = "<i class=\"fa-solid fa-trash\" aria-hidden=\"true\"></i>";
+    deleteButton.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      await onDelete(this.session.id);
+    });
+
+    cell.appendChild(deleteButton);
     return cell;
   }
 

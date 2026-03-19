@@ -9,6 +9,7 @@ export interface TranscriptionSegmentsRepository {
   getById(id: string): Promise<TranscriptionSegment | null>;
   listBySessionId(sessionId: string): Promise<TranscriptionSegment[]>;
   listBySubjectId(subjectId: string): Promise<TranscriptionSegment[]>;
+  deleteBySessionId(sessionId: string): Promise<void>;
   update(segment: TranscriptionSegment): Promise<TranscriptionSegment>;
   delete(id: string): Promise<void>;
 }
@@ -71,6 +72,13 @@ export class IndexedDbTranscriptionSegmentsRepository implements TranscriptionSe
 
     await sessionsDb.transcription_segments.put(updated);
     return updated;
+  }
+
+  public async deleteBySessionId(sessionId: string): Promise<void> {
+    await sessionsDb.transcription_segments
+      .where("sessionId")
+      .equals(sessionId)
+      .delete();
   }
 
   public async delete(id: string): Promise<void> {

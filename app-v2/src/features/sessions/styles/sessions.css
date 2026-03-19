@@ -1,4 +1,30 @@
 /* Sessions feature */
+.sessions-actions {
+    gap: 8px;
+}
+
+.sessions-action-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border: 1px solid #bfdbfe;
+    border-radius: 999px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    line-height: 1;
+    text-decoration: none;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+.sessions-action-chip:hover {
+    background: #dbeafe;
+}
+
 .sessions-table-wrap {
     overflow-x: auto;
 }
@@ -15,6 +41,12 @@
     border-bottom: 1px solid #e5e7eb;
     text-align: left;
     white-space: nowrap;
+}
+
+.sessions-actions-head {
+    width: 1%;
+    padding-left: 0;
+    padding-right: 0;
 }
 
 .sessions-table tbody tr {
@@ -62,4 +94,23 @@
     border-radius: 6px;
     padding: 4px 6px;
     font-size: 0.88rem;
+}
+
+.session-actions-cell {
+    text-align: right;
+}
+
+.session-row-delete-btn {
+    border: none;
+    background: transparent;
+    color: #b91c1c;
+    cursor: pointer;
+    padding: 0;
+    opacity: 0;
+    transition: opacity 120ms ease-in-out;
+}
+
+.sessions-table tbody tr:hover .session-row-delete-btn,
+.session-row-delete-btn:focus-visible {
+    opacity: 1;
 }

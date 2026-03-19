@@ -13,8 +13,11 @@
     <div class="card sessions-root">
       <div class="card-header card-header-row">
         <span>Sessions</span>
-        <div class="card-header-actions">
-          <button type="button" class="link-btn js-sessions-new-btn">New Session</button>
+        <div class="card-header-actions sessions-actions">
+          <button type="button" class="sessions-action-chip js-sessions-new-btn">
+            <i class="fa-solid fa-plus" aria-hidden="true"></i>
+            <span>New Session</span>
+          </button>
         </div>
       </div>
       <div class="sessions-table-wrap">
@@ -24,9 +27,11 @@
               <th>Name</th>
               <th>Input</th>
               <th>Started At</th>
+              <th>Size</th>
               <th>Subjects</th>
               <th>Segments</th>
               <th>Status</th>
+              <th class="sessions-actions-head" aria-label="Row actions"></th>
             </tr>
           </thead>
           <tbody class="js-sessions-table-body"></tbody>
