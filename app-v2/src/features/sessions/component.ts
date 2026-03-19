@@ -5,6 +5,7 @@ import type { TranscriptionSubject } from "./models/transcription-subject";
 import type { TranscriptionSegmentsRepository } from "./repositories/transcription-segments-repository";
 import type { TranscriptionSessionsRepository } from "./repositories/transcription-sessions-repository";
 import type { TranscriptionSubjectsRepository } from "./repositories/transcription-subjects-repository";
+import { SessionTableRowComponent } from "./session-table-row-component";
 
 interface SessionCounters {
   subjects: number;
@@ -47,24 +48,20 @@ export class SessionsComponent {
 
     this.binder.tableBody.innerHTML = "";
     for (const session of sessions) {
-      const row = document.createElement("tr");
-      row.dataset.sessionId = session.id;
-      if (selectedSessionId === session.id) {
-        row.classList.add("is-selected");
-      }
-
-      row.appendChild(this.makeCell(session.name?.trim() || "Untitled session"));
-      row.appendChild(this.makeCell(session.inputType));
-      row.appendChild(this.makeCell(new Date(session.startedAt).toLocaleString()));
-      row.appendChild(this.makeCell(String(countersBySession.get(session.id)?.subjects ?? 0)));
-      row.appendChild(this.makeCell(String(countersBySession.get(session.id)?.segments ?? 0)));
-      row.appendChild(this.makeCell(session.endedAt === null ? "active" : "finished"));
-
-      row.addEventListener("click", () => {
-        this.setSessionIdToHash(session.id);
+      const rowComponent = new SessionTableRowComponent({
+        session,
+        counters: {
+          subjects: countersBySession.get(session.id)?.subjects ?? 0,
+          segments: countersBySession.get(session.id)?.segments ?? 0
+        },
+        isSelected: selectedSessionId === session.id,
+        sessionsRepository: this.sessionsRepository,
+        onSelect: (sessionId) => {
+          this.setSessionIdToHash(sessionId);
+        }
       });
 
-      this.binder.tableBody.appendChild(row);
+      this.binder.tableBody.appendChild(rowComponent.root);
     }
 
     if (sessions.length > 0 && !selectedSessionId) {
@@ -136,12 +133,6 @@ export class SessionsComponent {
       if (!(row instanceof HTMLTableRowElement)) return;
       row.classList.toggle("is-selected", row.dataset.sessionId === selectedSessionId);
     });
-  }
-
-  private makeCell(text: string): HTMLTableCellElement {
-    const cell = document.createElement("td");
-    cell.textContent = text;
-    return cell;
   }
 
   private getSessionIdFromHash(): string | null {

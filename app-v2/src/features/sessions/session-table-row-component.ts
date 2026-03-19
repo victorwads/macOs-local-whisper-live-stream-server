@@ -1,0 +1,144 @@
+import type { TranscriptionSession } from "./models/transcription-session";
+import type { TranscriptionSessionsRepository } from "./repositories/transcription-sessions-repository";
+
+export interface SessionTableRowCounters {
+  subjects: number;
+  segments: number;
+}
+
+interface SessionTableRowComponentOptions {
+  session: TranscriptionSession;
+  counters: SessionTableRowCounters;
+  isSelected: boolean;
+  sessionsRepository: TranscriptionSessionsRepository;
+  onSelect: (sessionId: string) => void;
+}
+
+export class SessionTableRowComponent {
+  public readonly root: HTMLTableRowElement;
+
+  private readonly session: TranscriptionSession;
+  private readonly sessionsRepository: TranscriptionSessionsRepository;
+
+  public constructor(options: SessionTableRowComponentOptions) {
+    this.session = options.session;
+    this.sessionsRepository = options.sessionsRepository;
+    this.root = document.createElement("tr");
+    this.root.dataset.sessionId = options.session.id;
+    this.root.classList.toggle("is-selected", options.isSelected);
+
+    this.root.appendChild(this.makeNameCell());
+    this.root.appendChild(this.makeCell(options.session.inputType));
+    this.root.appendChild(this.makeCell(new Date(options.session.startedAt).toLocaleString()));
+    this.root.appendChild(this.makeCell(String(options.counters.subjects)));
+    this.root.appendChild(this.makeCell(String(options.counters.segments)));
+    this.root.appendChild(this.makeCell(options.session.endedAt === null ? "active" : "finished"));
+
+    this.root.addEventListener("click", () => {
+      options.onSelect(options.session.id);
+    });
+  }
+
+  public setSelected(selected: boolean): void {
+    this.root.classList.toggle("is-selected", selected);
+  }
+
+  private makeCell(text: string): HTMLTableCellElement {
+    const cell = document.createElement("td");
+    cell.textContent = text;
+    return cell;
+  }
+
+  private makeNameCell(): HTMLTableCellElement {
+    const cell = document.createElement("td");
+
+    const wrap = document.createElement("span");
+    wrap.className = "session-name-wrap";
+
+    const title = document.createElement("span");
+    title.className = "session-name-title";
+    title.textContent = this.session.name?.trim() || "Untitled session";
+    title.title = "Double click to edit session name";
+    title.addEventListener("dblclick", (event) => {
+      event.stopPropagation();
+      this.enterNameEditMode(title);
+    });
+
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.className = "session-name-edit-btn";
+    editButton.title = "Edit session name";
+    editButton.setAttribute("aria-label", "Edit session name");
+    editButton.innerHTML = "<i class=\"fa-solid fa-pen\" aria-hidden=\"true\"></i>";
+    editButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      this.enterNameEditMode(title);
+    });
+
+    wrap.appendChild(title);
+    wrap.appendChild(editButton);
+    cell.appendChild(wrap);
+
+    return cell;
+  }
+
+  private enterNameEditMode(titleElement: HTMLSpanElement): void {
+    const parent = titleElement.parentElement;
+    if (!(parent instanceof HTMLElement)) return;
+    if (parent.querySelector("input")) return;
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "session-name-input";
+    input.value = this.session.name?.trim() || "Untitled session";
+
+    const save = async () => {
+      const nextName = input.value.trim() || "Untitled session";
+      const updated = await this.sessionsRepository.update({
+        ...this.session,
+        name: nextName
+      });
+
+      this.session.name = updated.name;
+      titleElement.textContent = updated.name?.trim() || "Untitled session";
+      input.remove();
+      titleElement.style.display = "";
+      const editButton = parent.querySelector(".session-name-edit-btn");
+      if (editButton instanceof HTMLElement) {
+        editButton.style.display = "";
+      }
+    };
+
+    const cancel = () => {
+      input.remove();
+      titleElement.style.display = "";
+      const editButton = parent.querySelector(".session-name-edit-btn");
+      if (editButton instanceof HTMLElement) {
+        editButton.style.display = "";
+      }
+    };
+
+    input.addEventListener("click", (event) => event.stopPropagation());
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        void save();
+      }
+      if (event.key === "Escape") {
+        cancel();
+      }
+    });
+    input.addEventListener("blur", () => {
+      void save();
+    });
+
+    titleElement.style.display = "none";
+    const editButton = parent.querySelector(".session-name-edit-btn");
+    if (editButton instanceof HTMLElement) {
+      editButton.style.display = "none";
+    }
+
+    parent.appendChild(input);
+    input.focus();
+    input.select();
+  }
+}
