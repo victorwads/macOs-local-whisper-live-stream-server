@@ -664,6 +664,36 @@ button:hover { opacity: 0.9; }
     background: #475569;
 }
 
+.sessions-table-wrap {
+    overflow-x: auto;
+}
+
+.sessions-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.sessions-table th,
+.sessions-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #e5e7eb;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.sessions-table tbody tr {
+    cursor: pointer;
+}
+
+.sessions-table tbody tr:hover {
+    background: #eff6ff;
+}
+
+.sessions-table tbody tr.is-selected {
+    background: #dbeafe;
+}
+
 @keyframes transcript-spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }

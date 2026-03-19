@@ -6,4 +6,5 @@ export * from "./controls/model-configs-binder";
 export * from "./live-transcriptions/live-transcriptions-binder";
 export * from "./live-transcriptions/player-binder";
 export * from "./live-transcriptions/transcription-box-binder";
+export * from "./sessions/sessions-binder";
 export * from "./system-logs/system-logs-binder";

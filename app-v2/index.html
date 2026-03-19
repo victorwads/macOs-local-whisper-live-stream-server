@@ -10,6 +10,30 @@
   <div id="appRoot" class="container">
     <h1>Live Whisper Transcription</h1>
 
+    <div class="card sessions-root">
+      <div class="card-header card-header-row">
+        <span>Sessions</span>
+        <div class="card-header-actions">
+          <button type="button" class="link-btn js-sessions-new-btn">New Session</button>
+        </div>
+      </div>
+      <div class="sessions-table-wrap">
+        <table class="sessions-table" aria-label="Sessions list">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Input</th>
+              <th>Started At</th>
+              <th>Subjects</th>
+              <th>Segments</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody class="js-sessions-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Transcription Area -->
     <div class="card transcript-section live-transcriptions-root hide-details">
       <div class="card-header card-header-row">

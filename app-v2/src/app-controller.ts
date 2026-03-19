@@ -10,7 +10,8 @@ import { SessionViewerComponent } from "./features/session-viewer";
 import {
   IndexedDbTranscriptionSegmentsRepository,
   IndexedDbTranscriptionSessionsRepository,
-  IndexedDbTranscriptionSubjectsRepository
+  IndexedDbTranscriptionSubjectsRepository,
+  SessionsComponent
 } from "./features/sessions";
 import {
   LocalStorageModelConfigsRepository,
@@ -28,6 +29,7 @@ function parseBackendId(value: string): BackendId {
 export class AppController {
   public readonly binders: AppLayoutBinder;
   public readonly modelConfigsComponent: ModelConfigsComponent;
+  public readonly sessionsComponent: SessionsComponent;
   public readonly sessionViewerComponent: SessionViewerComponent;
   public readonly modelsCatalog: ModelsCatalog;
 
@@ -46,17 +48,33 @@ export class AppController {
       modelConfigsRepository
     );
 
+    const sessionsRepository = new IndexedDbTranscriptionSessionsRepository();
+    const subjectsRepository = new IndexedDbTranscriptionSubjectsRepository();
+    const segmentsRepository = new IndexedDbTranscriptionSegmentsRepository();
+
+    this.sessionsComponent = new SessionsComponent(
+      this.binders.sessions,
+      sessionsRepository,
+      subjectsRepository,
+      segmentsRepository
+    );
+
     this.sessionViewerComponent = new SessionViewerComponent(
       this.binders.liveTranscriptions,
-      new IndexedDbTranscriptionSessionsRepository(),
-      new IndexedDbTranscriptionSubjectsRepository(),
-      new IndexedDbTranscriptionSegmentsRepository()
+      this.sessionsComponent,
+      subjectsRepository,
+      segmentsRepository
     );
   }
 
   public async initialize(): Promise<void> {
     this.modelConfigsComponent.initialize();
+    await this.sessionsComponent.initialize();
     await this.sessionViewerComponent.initialize();
+    this.sessionsComponent.bindHashChange(() => {
+      void this.sessionViewerComponent.refresh();
+      void this.sessionsComponent.refresh();
+    });
     await this.refreshModelList();
     this.bindBackendModelSource();
   }

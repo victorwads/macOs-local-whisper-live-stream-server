@@ -1,9 +1,9 @@
 import type { LiveTranscriptionsBinder } from "../../binders/live-transcriptions/live-transcriptions-binder";
 import type {
+  SessionsComponent,
   TranscriptionSegment,
   TranscriptionSegmentsRepository,
   TranscriptionSession,
-  TranscriptionSessionsRepository,
   TranscriptionSubject,
   TranscriptionSubjectsRepository
 } from "../sessions";
@@ -20,7 +20,7 @@ export class SessionViewerComponent {
 
   public constructor(
     public readonly binder: LiveTranscriptionsBinder,
-    private readonly sessionsRepository: TranscriptionSessionsRepository,
+    private readonly sessionsComponent: SessionsComponent,
     private readonly subjectsRepository: TranscriptionSubjectsRepository,
     private readonly segmentsRepository: TranscriptionSegmentsRepository
   ) {}
@@ -31,7 +31,7 @@ export class SessionViewerComponent {
   }
 
   public async refresh(): Promise<void> {
-    const currentSession = await this.resolveCurrentSession();
+    const currentSession = await this.sessionsComponent.resolveCurrentSession();
     if (!currentSession) {
       this.state = {
         currentSession: null,
@@ -105,16 +105,6 @@ export class SessionViewerComponent {
 
       this.downloadTextFile(content, this.makeExportFileName());
     });
-  }
-
-  private async resolveCurrentSession(): Promise<TranscriptionSession | null> {
-    const activeSessions = await this.sessionsRepository.getActive();
-    if (activeSessions.length > 0) {
-      return activeSessions[0];
-    }
-
-    const allSessions = await this.sessionsRepository.getAll();
-    return allSessions[0] ?? null;
   }
 
   private render(): void {
