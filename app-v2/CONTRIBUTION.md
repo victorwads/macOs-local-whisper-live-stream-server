@@ -61,6 +61,41 @@ Current structure:
 Global/base CSS should contain only cross-feature primitives and global layout foundations.
 Do not move feature-specific selectors back into `src/styles/base.css`.
 
+## Logging Architecture
+Use the centralized logger only.
+
+Rules:
+- Use `import { logger } from "@logger"` in app code.
+- Never instantiate `Logger` directly in features/components/helpers.
+- The logger singleton is bound once at app bootstrap (`AppController`) to `System Logs` UI.
+- `console.log` is allowed only inside `src/features/system-logs/logger.ts`.
+- Replace any `console.error/warn/info/debug/log` in feature code with `logger.log(...)` or `logger.error(...)`.
+
+Criteria for where to add logs:
+- Log at action boundaries:
+  - User-triggered actions (button click flows, toggles, start/stop operations).
+  - Controller lifecycle (`initialize`, recovery start/end, backend switch).
+- Log at state transitions:
+  - Session status changes (`decoding -> active`, `recording -> saving`, etc.).
+  - Backend/model selection changes.
+- Log around external I/O:
+  - HTTP requests and failures.
+  - Storage/repository writes with meaningful side effects.
+  - Audio decode/merge operations and recovery merges.
+- Log important success/failure checkpoints:
+  - Start + completion of long/critical operations.
+  - Error cases with `logger.error(message, error)`.
+
+What to avoid:
+- Do not log inside tight loops/hot render paths per item/frame.
+- Do not log sensitive raw payloads or large blobs/text bodies.
+- Do not duplicate equivalent messages in multiple layers for the same event.
+
+Message style:
+- Keep messages short, factual, and searchable.
+- Include stable identifiers when available (`sessionId`, backend id, model name).
+- Prefer one clear log per transition instead of many micro-logs.
+
 ## File Organization
 When adding feature UI behavior:
 - Add or update files inside the feature folder first.

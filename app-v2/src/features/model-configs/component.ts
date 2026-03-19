@@ -6,6 +6,7 @@ import {
   DEFAULT_MODEL_CONFIGS_STATE,
   type ModelConfigsState
 } from "./types";
+import { logger } from "@logger";
 
 export class ModelConfigsComponent {
   private state: ModelConfigsState = { ...DEFAULT_MODEL_CONFIGS_STATE };
@@ -20,6 +21,7 @@ export class ModelConfigsComponent {
     this.syncContextAndLoad();
     this.render();
     this.bindEvents();
+    logger.log("ModelConfigsComponent initialized.");
   }
 
   public setModels(models: BackendModelInfo[] | string[]): void {
@@ -35,6 +37,7 @@ export class ModelConfigsComponent {
     this.renderModelOptions();
     this.syncContextAndLoad();
     this.render();
+    logger.log(`Model configs received ${this.availableModels.length} model option(s).`);
   }
 
   public getState(): ModelConfigsState {
@@ -49,6 +52,7 @@ export class ModelConfigsComponent {
 
     this.persist();
     this.render();
+    logger.log("Model configs state updated.");
   }
 
   private bindEvents(): void {

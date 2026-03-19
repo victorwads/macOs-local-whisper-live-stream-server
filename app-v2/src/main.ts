@@ -3,6 +3,7 @@ import "./styles/main.css";
 import "./features/controls/styles/controls.css";
 import "./features/sessions/styles/sessions.css";
 import "./features/session-viewer/styles/session-viewer.css";
+import "./features/system-logs/styles/system-logs.css";
 import "./init-mocks";
 
 import { AppController } from "./app-controller";

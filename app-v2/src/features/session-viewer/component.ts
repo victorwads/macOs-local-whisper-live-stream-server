@@ -9,6 +9,7 @@ import type {
 } from "../sessions";
 import { SessionViewerSegmentComponent } from "./segment-component";
 import type { SessionViewerState } from "./types";
+import { logger } from "@logger";
 
 export class SessionViewerComponent {
   private state: SessionViewerState = {
@@ -27,6 +28,7 @@ export class SessionViewerComponent {
   ) {}
 
   public async initialize(): Promise<void> {
+    logger.log("SessionViewerComponent initialized.");
     this.bindEvents();
     await this.refresh();
   }
@@ -40,6 +42,7 @@ export class SessionViewerComponent {
         segments: []
       };
       this.renderEmptyState();
+      logger.log("Session viewer refreshed with no active session.");
       return;
     }
 
@@ -55,6 +58,7 @@ export class SessionViewerComponent {
     };
 
     this.render();
+    logger.log(`Session viewer refreshed for session '${currentSession.id}' with ${segments.length} segment(s).`);
   }
 
   private bindEvents(): void {
@@ -75,6 +79,7 @@ export class SessionViewerComponent {
     this.binder.onCopyLastSubjectClick(() => {
       const text = this.getLastSubjectText();
       if (text) {
+        logger.log("Copy last subject requested.");
         void this.copyToClipboard(text);
       }
     });
@@ -86,6 +91,7 @@ export class SessionViewerComponent {
         .filter(Boolean)
         .join("\n");
 
+      logger.log("Export TXT requested.");
       this.downloadTextFile(content, this.makeExportFileName());
     });
   }
@@ -189,8 +195,10 @@ export class SessionViewerComponent {
 
     try {
       await navigator.clipboard.writeText(text);
+      logger.log("Copied text to clipboard.");
     } catch {
       // Ignore clipboard errors in non-secure contexts.
+      logger.error("Failed to copy text to clipboard.");
     }
   }
 
@@ -204,6 +212,7 @@ export class SessionViewerComponent {
     anchor.click();
 
     URL.revokeObjectURL(url);
+    logger.log(`Transcript exported as '${fileName}'.`);
   }
 
   private makeExportFileName(): string {
@@ -291,6 +300,7 @@ export class SessionViewerComponent {
     );
 
     await this.refresh();
+    logger.log(`Subject created above segment '${targetSegment.id}'.`);
   }
 
   private async deleteSubjectFromSegment(subjectSegment: TranscriptionSegment): Promise<void> {
@@ -338,6 +348,7 @@ export class SessionViewerComponent {
 
     await this.segmentsRepository.delete(subjectSegment.id);
     await this.subjectsRepository.delete(subjectId);
+    logger.log(`Subject marker '${subjectSegment.id}' and subject '${subjectId}' deleted.`);
     await this.refresh();
   }
 }

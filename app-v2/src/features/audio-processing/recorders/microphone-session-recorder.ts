@@ -1,3 +1,5 @@
+import { logger } from "@logger";
+
 export interface MicrophoneSessionRecorderCallbacks {
   onChunkBlob: (blob: Blob) => Promise<void>;
 }
@@ -17,15 +19,18 @@ export class MicrophoneSessionRecorder {
   public async start(callbacks: MicrophoneSessionRecorderCallbacks): Promise<void> {
     if (this.isRecording) return;
 
+    logger.log("Microphone recorder start requested.");
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     this.mediaStream = stream;
 
     this.mimeType = this.resolveMimeType();
+    logger.log(`Microphone recorder started with mimeType '${this.mimeType}'.`);
     const recorder = new MediaRecorder(stream, { mimeType: this.mimeType });
     this.mediaRecorder = recorder;
 
     recorder.addEventListener("dataavailable", (event) => {
       if (!(event.data instanceof Blob) || event.data.size <= 0) return;
+      logger.log(`Microphone chunk captured (${event.data.size} bytes).`);
       void callbacks.onChunkBlob(event.data);
     });
 
@@ -36,6 +41,7 @@ export class MicrophoneSessionRecorder {
     const recorder = this.mediaRecorder;
     if (!recorder) return;
 
+    logger.log("Microphone recorder stop requested.");
     await new Promise<void>((resolve) => {
       recorder.addEventListener("stop", () => resolve(), { once: true });
       recorder.stop();
@@ -50,6 +56,7 @@ export class MicrophoneSessionRecorder {
       this.mediaStream = null;
     }
 
+    logger.log("Microphone recorder stopped.");
     return;
   }
 

@@ -1,5 +1,6 @@
 import type { BackendInterface } from "./backend-interface";
 import type { BackendId, BackendModelInfo } from "./types";
+import { logger } from "@logger";
 
 export class ModelsCatalog {
   private activeBackendId: BackendId;
@@ -13,6 +14,7 @@ export class ModelsCatalog {
 
   public setActiveBackend(backendId: BackendId): void {
     this.activeBackendId = backendId;
+    logger.log(`ModelsCatalog active backend set to '${backendId}'.`);
   }
 
   public getActiveBackendId(): BackendId {
@@ -50,11 +52,13 @@ export class ModelsCatalog {
   public async clearActiveBackendDownloadedModelsCache(): Promise<void> {
     const backend = this.backends[this.activeBackendId];
     await backend.clearDownloadedModelsCache();
+    logger.log(`Cleared models cache for backend '${this.activeBackendId}'.`);
   }
 
   public async clearAllBackendsDownloadedModelsCache(): Promise<void> {
     await Promise.all(
       Object.values(this.backends).map((backend) => backend.clearDownloadedModelsCache())
     );
+    logger.log("Cleared models cache for all backends.");
   }
 }

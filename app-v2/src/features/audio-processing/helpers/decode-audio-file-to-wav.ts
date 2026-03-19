@@ -1,4 +1,5 @@
 const TARGET_SAMPLE_RATE = 16000;
+import { logger } from "@logger";
 
 function toMono(audioBuffer: AudioBuffer): Float32Array {
   if (audioBuffer.numberOfChannels === 1) {
@@ -81,8 +82,10 @@ function encodeWavPcm16(samples: Float32Array, sampleRate: number): ArrayBuffer 
 }
 
 export async function decodeAudioFileToWav(file: File): Promise<Blob> {
+  logger.log(`Audio decode started for '${file.name}' (${file.size} bytes).`);
   const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!AudioContextCtor) {
+    logger.error("Audio decode failed: AudioContext is not available.");
     throw new Error("AudioContext is not available in this browser.");
   }
 
@@ -93,7 +96,13 @@ export async function decodeAudioFileToWav(file: File): Promise<Blob> {
     const mono = toMono(decoded);
     const resampled = resampleLinear(mono, decoded.sampleRate, TARGET_SAMPLE_RATE);
     const wav = encodeWavPcm16(resampled, TARGET_SAMPLE_RATE);
+    logger.log(
+      `Audio decode finished for '${file.name}': ${decoded.sampleRate}Hz -> ${TARGET_SAMPLE_RATE}Hz, ${resampled.length} samples.`
+    );
     return new Blob([wav], { type: "audio/wav" });
+  } catch (error) {
+    logger.error(`Audio decode failed for '${file.name}'.`, error);
+    throw error;
   } finally {
     await context.close().catch(() => undefined);
   }

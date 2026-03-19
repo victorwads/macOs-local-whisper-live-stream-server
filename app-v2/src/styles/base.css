@@ -326,21 +326,6 @@ button:hover { opacity: 0.9; }
     display: none !important;
 }
 
-/* Logs */
-#log {
-    min-height: 70px;
-    max-height: 170px;
-    overflow-y: auto;
-    background: #1e1e1e;
-    color: #d4d4d4;
-    padding: 12px;
-    border-radius: 8px;
-    font-family: 'Consolas', 'Monaco', monospace;
-    font-size: 13px;
-    margin: 0;
-    white-space: pre-wrap;
-}
-
 #status {
     font-weight: 500;
     color: #666;

@@ -1,6 +1,7 @@
 import type { BackendInterface } from "../backend-interface";
 import type { BackendId, BackendModelInfo } from "../types";
 import { WhisperCppWasmModelRepository } from "./whispercpp-wasm-model-repository";
+import { logger } from "@logger";
 
 export class WhisperCppWasmBackend implements BackendInterface {
   public readonly id: BackendId = "whispercpp_wasm";
@@ -16,7 +17,9 @@ export class WhisperCppWasmBackend implements BackendInterface {
   }
 
   public async getModelsList(): Promise<BackendModelInfo[]> {
-    return this.modelRepository.getModelsList();
+    const models = await this.modelRepository.getModelsList();
+    logger.log(`whisper.cpp WASM backend returned ${models.length} model(s).`);
+    return models;
   }
 
   public async clearDownloadedModelsCache(): Promise<void> {

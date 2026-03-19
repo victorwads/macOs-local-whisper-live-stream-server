@@ -9,7 +9,11 @@
     "sourceMap": true,
     "inlineSources": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "@logger": ["src/features/system-logs/logger.ts"]
+    }
   },
   "include": ["src/**/*.ts", "vite.config.ts"]
 }

@@ -20,6 +20,7 @@ import {
   LocalStorageModelConfigsRepository,
   ModelConfigsComponent
 } from "./features/model-configs";
+import { logger } from "@logger";
 
 function parseBackendId(value: string): BackendId {
   if (value === "webgpu" || value === "whispercpp_wasm") {
@@ -39,6 +40,8 @@ export class AppController {
 
   public constructor(root: HTMLElement) {
     this.binders = new AppLayoutBinder(root);
+    logger.bindSystemLogsBinder(this.binders.systemLogs);
+    logger.log("AppController initialized.");
 
     this.modelsCatalog = new ModelsCatalog({
       python: new PythonBackend(),
@@ -87,6 +90,7 @@ export class AppController {
   }
 
   public async initialize(): Promise<void> {
+    logger.log("App initialization started.");
     this.modelConfigsComponent.initialize();
     await this.failureRecoveryController.run();
     await this.sessionsComponent.initialize();
@@ -96,14 +100,19 @@ export class AppController {
       void this.sessionsComponent.refresh();
     });
     const switchedFromPythonToWebGpu = await this.ensureInitialBackendAvailability();
+    if (switchedFromPythonToWebGpu) {
+      logger.log("Initial backend switched from python to webgpu because python backend is offline.");
+    }
     await this.refreshModelList(switchedFromPythonToWebGpu);
     this.bindBackendModelSource();
+    logger.log("App initialization finished.");
   }
 
   private bindBackendModelSource(): void {
     this.binders.controls.globalConfigs.backendModeInput.addEventListener("change", async () => {
       const backendId = parseBackendId(this.binders.controls.globalConfigs.backendModeInput.value);
       this.modelsCatalog.setActiveBackend(backendId);
+      logger.log(`Backend changed to '${backendId}'.`);
       await this.refreshModelList(true);
     });
   }
@@ -125,6 +134,7 @@ export class AppController {
 
   private async refreshModelList(forceBackendDefaultModel = false): Promise<void> {
     const models = await this.modelsCatalog.getModelsList();
+    logger.log(`Loaded ${models.length} model(s) for backend '${this.modelsCatalog.getActiveBackendId()}'.`);
     this.modelConfigsComponent.setModels(models);
 
     const modelNames = models.map((entry) => entry.name);
@@ -144,5 +154,6 @@ export class AppController {
     if (!nextModel) return;
 
     this.modelConfigsComponent.setState({ model: nextModel });
+    logger.log(`Model selected: '${nextModel}'.`);
   }
 }

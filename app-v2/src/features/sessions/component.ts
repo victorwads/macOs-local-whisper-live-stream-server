@@ -10,6 +10,7 @@ import type { TranscriptionSegmentsRepository } from "./repositories/transcripti
 import type { TranscriptionSessionsRepository } from "./repositories/transcription-sessions-repository";
 import type { TranscriptionSubjectsRepository } from "./repositories/transcription-subjects-repository";
 import { SessionTableRowComponent } from "./session-table-row-component";
+import { logger } from "@logger";
 
 interface SessionCounters {
   subjects: number;
@@ -33,6 +34,7 @@ export class SessionsComponent {
   ) {}
 
   public async initialize(): Promise<void> {
+    logger.log("SessionsComponent initialized.");
     this.bindEvents();
     await this.refresh();
   }
@@ -52,6 +54,7 @@ export class SessionsComponent {
   }
 
   public async refresh(): Promise<void> {
+    logger.log("Sessions refresh started.");
     const sessions = await this.sessionsRepository.getAll();
     this.sessionsSnapshot = sessions;
     const countersBySession = await this.getCountersBySession(sessions);
@@ -87,6 +90,7 @@ export class SessionsComponent {
     }
 
     await this.syncSessionActions();
+    logger.log(`Sessions refresh finished with ${sessions.length} session(s).`);
   }
 
   public async resolveCurrentSession(): Promise<TranscriptionSession | null> {
@@ -109,9 +113,11 @@ export class SessionsComponent {
   private bindEvents(): void {
     this.binder.newSessionButton.addEventListener("click", async () => {
       try {
+        logger.log("New session button clicked.");
         await this.createAndSelectNewSession();
         await this.refresh();
       } catch (error) {
+        logger.error("Failed to create new session.", error);
         const message = error instanceof Error ? error.message : "Failed to create session.";
         window.alert(message);
       }
@@ -119,18 +125,22 @@ export class SessionsComponent {
 
     this.binder.micToggleButton.addEventListener("click", async () => {
       try {
+        logger.log("Microphone toggle button clicked.");
         await this.handleMicToggle();
       } catch (error) {
+        logger.error("Failed to toggle microphone session.", error);
         const message = error instanceof Error ? error.message : "Could not start microphone recording.";
         window.alert(message);
       }
     });
 
     this.binder.fileToggleButton.addEventListener("click", async () => {
+      logger.log("File transcription toggle button clicked.");
       await this.handleFileTranscriptionToggle();
     });
 
     this.binder.newSubjectButton.addEventListener("click", async () => {
+      logger.log("New subject button clicked.");
       await this.handleCreateSubject();
     });
   }
@@ -141,6 +151,7 @@ export class SessionsComponent {
 
     if (mode === "microphone") {
       const createdMicSession = await this.createNewMicrophoneSession();
+      logger.log(`Created microphone session '${createdMicSession.id}'.`);
       this.setSessionIdToHash(createdMicSession.id);
       return createdMicSession;
     }
@@ -149,6 +160,7 @@ export class SessionsComponent {
     if (!file) return null;
 
     const createdFileSession = await this.createNewFileSession(file);
+    logger.log(`Created file session '${createdFileSession.id}' from '${file.name}'.`);
     this.fileRunningBySessionId.set(createdFileSession.id, createdFileSession.status === "recording");
     this.setSessionIdToHash(createdFileSession.id);
     return createdFileSession;
@@ -180,9 +192,11 @@ export class SessionsComponent {
       const decodedAudioBlob = await decodeAudioFileToWav(file);
       await this.sessionAudioFilesRepository.save(created.id, decodedAudioBlob);
       await this.updateSessionStatus(created, "active");
+      logger.log(`File session '${created.id}' decoded and saved successfully.`);
       return created;
     } catch (error) {
       await this.updateSessionStatus(created, "error");
+      logger.error(`File session '${created.id}' failed while decoding/saving audio.`, error);
       throw error;
     } finally {
       await this.refresh();
@@ -227,9 +241,11 @@ export class SessionsComponent {
 
     const running = session.status === "recording";
     if (!running) {
+      logger.log(`Starting microphone capture for session '${session.id}'.`);
       await this.microphoneRecorder.start({
         onChunkBlob: async (blob) => {
           await this.sessionPendingAudioChunksRepository.addChunk(session.id, blob, blob.type);
+          logger.log(`Stored pending mic chunk for session '${session.id}' (${blob.size} bytes).`);
           await this.refresh();
         }
       });
@@ -239,6 +255,7 @@ export class SessionsComponent {
       return;
     }
 
+    logger.log(`Stopping microphone capture for session '${session.id}'.`);
     await this.updateSessionStatus(session, "saving");
     await this.refresh();
 
@@ -247,6 +264,7 @@ export class SessionsComponent {
     const latest = await this.sessionsRepository.getById(session.id);
     if (latest) {
       await this.updateSessionStatus(latest, "active");
+      logger.log(`Microphone session '${session.id}' moved to active after flush.`);
     }
     await this.refresh();
     await this.syncSessionActions();
@@ -258,6 +276,7 @@ export class SessionsComponent {
 
     const running = this.fileRunningBySessionId.get(session.id) ?? false;
     this.fileRunningBySessionId.set(session.id, !running);
+    logger.log(`File transcription for session '${session.id}' is now ${!running ? "running" : "paused"}.`);
     await this.syncSessionActions();
   }
 
@@ -266,6 +285,7 @@ export class SessionsComponent {
     if (!session || session.inputType !== "microphone") return;
 
     await this.subjectsRepository.createNewSubject(session.id);
+    logger.log(`Subject created for session '${session.id}'.`);
     await this.refresh();
   }
 
@@ -324,6 +344,7 @@ export class SessionsComponent {
     try {
       const pending = await this.sessionPendingAudioChunksRepository.listBySessionId(sessionId);
       if (pending.length === 0) {
+        logger.log(`No pending audio chunks to flush for session '${sessionId}'.`);
         return;
       }
 
@@ -338,6 +359,7 @@ export class SessionsComponent {
       const merged = new Blob(parts, { type: mimeType });
       await this.sessionAudioFilesRepository.save(sessionId, merged);
       await this.sessionPendingAudioChunksRepository.deleteBySessionId(sessionId);
+      logger.log(`Flushed ${pending.length} pending chunk(s) into session '${sessionId}'.`);
     } finally {
       await this.refresh();
     }
@@ -371,6 +393,7 @@ export class SessionsComponent {
 
   private async updateSessionStatus(session: TranscriptionSession, status: SessionStatus): Promise<void> {
     if (session.status === status) return;
+    logger.log(`Session '${session.id}' status changed: ${session.status} -> ${status}.`);
     await this.sessionsRepository.update({
       ...session,
       status

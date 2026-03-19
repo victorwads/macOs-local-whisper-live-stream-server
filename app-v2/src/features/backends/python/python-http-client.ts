@@ -2,6 +2,7 @@ interface PythonInstalledInfoEntry {
   size_mb?: number;
   size_bytes?: number;
 }
+import { logger } from "@logger";
 
 export interface PythonModelsResponse {
   installed?: string[];
@@ -69,7 +70,7 @@ export class PythonHttpClient {
 
       return (await response.json()) as T;
     } catch (error) {
-      console.error(`Python backend ${options.context} request failed:`, error);
+      logger.error(`Python backend ${options.context} request failed`, error);
       return null;
     }
   }
@@ -87,7 +88,7 @@ export class PythonHttpClient {
 
       return true;
     } catch (error) {
-      console.error(`Python backend ${options.context} request failed:`, error);
+      logger.error(`Python backend ${options.context} request failed`, error);
       return false;
     }
   }

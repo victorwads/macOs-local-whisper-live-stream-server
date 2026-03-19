@@ -2,6 +2,7 @@ import type { BackendInterface } from "../backend-interface";
 import type { BackendModelInfo, BackendId } from "../types";
 import { chooseSizeBytes } from "../helpers/choose-size-bytes";
 import { PythonHttpClient } from "./python-http-client";
+import { logger } from "@logger";
 
 export class PythonBackend implements BackendInterface {
   public readonly id: BackendId = "python";
@@ -36,11 +37,13 @@ export class PythonBackend implements BackendInterface {
 
     const uniqueModelNames = Array.from(new Set([...supported, ...installed])).sort();
 
-    return uniqueModelNames.map((name) => ({
+    const models = uniqueModelNames.map((name) => ({
       name,
       installed: installed.has(name),
       sizeBytes: chooseSizeBytes(installedInfo[name])
     }));
+    logger.log(`Python backend returned ${models.length} model(s).`);
+    return models;
   }
 
   public async clearDownloadedModelsCache(): Promise<void> {

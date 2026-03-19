@@ -6,6 +6,7 @@ import {
   type GlobalConfigsState,
   type SubjectVoiceMatchMode
 } from "./types";
+import { logger } from "@logger";
 
 export class GlobalConfigsComponent {
   private state: GlobalConfigsState = { ...DEFAULT_GLOBAL_CONFIGS_STATE };
@@ -19,6 +20,7 @@ export class GlobalConfigsComponent {
     this.state = this.repository.load();
     this.render();
     this.bindEvents();
+    logger.log("GlobalConfigsComponent initialized.");
   }
 
   public getState(): GlobalConfigsState {
@@ -33,6 +35,7 @@ export class GlobalConfigsComponent {
 
     this.persist();
     this.render();
+    logger.log("Global configs state updated.");
   }
 
   private bindEvents(): void {

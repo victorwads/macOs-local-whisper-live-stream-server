@@ -1,3 +1,7 @@
+import { logger } from "@logger";
+
 export class VoiceActivityDetectionSegmenter {
-  // TODO: Define constructor dependencies and segmentation contract.
+  public constructor() {
+    logger.log("VoiceActivityDetectionSegmenter initialized.");
+  }
 }

@@ -1,6 +1,11 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      "@logger": "/src/features/system-logs/logger.ts"
+    }
+  },
   server: {
     host: true,
     port: 4173,

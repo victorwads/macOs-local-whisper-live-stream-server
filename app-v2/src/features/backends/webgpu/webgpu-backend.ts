@@ -1,6 +1,7 @@
 import type { BackendInterface } from "../backend-interface";
 import type { BackendId, BackendModelInfo } from "../types";
 import { WebGpuModelRepository } from "./webgpu-model-repository";
+import { logger } from "@logger";
 
 export class WebGpuBackend implements BackendInterface {
   public readonly id: BackendId = "webgpu";
@@ -16,7 +17,9 @@ export class WebGpuBackend implements BackendInterface {
   }
 
   public async getModelsList(): Promise<BackendModelInfo[]> {
-    return this.modelRepository.getModelsList();
+    const models = await this.modelRepository.getModelsList();
+    logger.log(`WebGPU backend returned ${models.length} model(s).`);
+    return models;
   }
 
   public async clearDownloadedModelsCache(): Promise<void> {
