@@ -19,6 +19,16 @@ export class ModelsCatalog {
     return this.activeBackendId;
   }
 
+  public async isActiveBackendOnline(): Promise<boolean> {
+    const backend = this.backends[this.activeBackendId];
+    return await backend.isOnline();
+  }
+
+  public async getActiveBackendDefaultModel(): Promise<string | null> {
+    const backend = this.backends[this.activeBackendId];
+    return await backend.getDefaultModel();
+  }
+
   public async getModelsList(): Promise<BackendModelInfo[]> {
     const backend = this.backends[this.activeBackendId];
     return await backend.getModelsList();

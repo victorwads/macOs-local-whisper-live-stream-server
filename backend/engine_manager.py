@@ -10,7 +10,7 @@ from whisper_engine import WhisperEngine
 from whisper_cpp import WhisperCppEngine
 from whisper_server_client import server_manager
 
-DEFAULT_MODEL = os.getenv("WHISPER_MODEL_SIZE", "large-v3")
+DEFAULT_MODEL = os.getenv("WHISPER_MODEL_SIZE", "medium-q5_0")
 BACKEND = os.getenv("WHISPER_BACKEND", "cpp").lower()  # cpp or faster
 
 # Fallback quantized variants we want to expose even if remote model listing is unavailable.

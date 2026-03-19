@@ -7,6 +7,14 @@ export class WebGpuBackend implements BackendInterface {
 
   public constructor(private readonly modelRepository = new WebGpuModelRepository()) {}
 
+  public async isOnline(): Promise<boolean> {
+    return true;
+  }
+
+  public async getDefaultModel(): Promise<string | null> {
+    return "base-q4";
+  }
+
   public async getModelsList(): Promise<BackendModelInfo[]> {
     return this.modelRepository.getModelsList();
   }

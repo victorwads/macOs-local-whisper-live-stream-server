@@ -7,6 +7,14 @@ export class WhisperCppWasmBackend implements BackendInterface {
 
   public constructor(private readonly modelRepository = new WhisperCppWasmModelRepository()) {}
 
+  public async isOnline(): Promise<boolean> {
+    return true;
+  }
+
+  public async getDefaultModel(): Promise<string | null> {
+    return await this.modelRepository.getDefaultModel();
+  }
+
   public async getModelsList(): Promise<BackendModelInfo[]> {
     return this.modelRepository.getModelsList();
   }

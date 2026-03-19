@@ -92,6 +92,11 @@ export class WhisperCppWasmModelRepository implements ModelRepository {
     }
   }
 
+  public async getDefaultModel(): Promise<string | null> {
+    const models = await this.getAllModels();
+    return models[0]?.id ?? null;
+  }
+
   private async getInstalledSet(): Promise<Set<string>> {
     return new Set(await this.listInstalledModelNames());
   }

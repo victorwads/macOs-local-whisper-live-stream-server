@@ -75,7 +75,8 @@ export class AppController {
       void this.sessionViewerComponent.refresh();
       void this.sessionsComponent.refresh();
     });
-    await this.refreshModelList();
+    const switchedFromPythonToWebGpu = await this.ensureInitialBackendAvailability();
+    await this.refreshModelList(switchedFromPythonToWebGpu);
     this.bindBackendModelSource();
   }
 
@@ -83,12 +84,45 @@ export class AppController {
     this.binders.controls.globalConfigs.backendModeInput.addEventListener("change", async () => {
       const backendId = parseBackendId(this.binders.controls.globalConfigs.backendModeInput.value);
       this.modelsCatalog.setActiveBackend(backendId);
-      await this.refreshModelList();
+      await this.refreshModelList(true);
     });
   }
 
-  private async refreshModelList(): Promise<void> {
+  private async ensureInitialBackendAvailability(): Promise<boolean> {
+    if (this.modelsCatalog.getActiveBackendId() !== "python") {
+      return false;
+    }
+
+    const isPythonOnline = await this.modelsCatalog.isActiveBackendOnline();
+    if (isPythonOnline) {
+      return false;
+    }
+
+    this.modelsCatalog.setActiveBackend("webgpu");
+    this.binders.controls.globalConfigs.backendModeInput.value = "webgpu";
+    return true;
+  }
+
+  private async refreshModelList(forceBackendDefaultModel = false): Promise<void> {
     const models = await this.modelsCatalog.getModelsList();
     this.modelConfigsComponent.setModels(models);
+
+    const modelNames = models.map((entry) => entry.name);
+    if (modelNames.length === 0) return;
+
+    const currentModel = this.modelConfigsComponent.getState().model;
+    const backendDefaultModel = await this.modelsCatalog.getActiveBackendDefaultModel();
+    const isCurrentModelValid = !!currentModel && modelNames.includes(currentModel);
+
+    if (isCurrentModelValid && !forceBackendDefaultModel) {
+      return;
+    }
+
+    const nextModel = backendDefaultModel && modelNames.includes(backendDefaultModel)
+      ? backendDefaultModel
+      : modelNames[0];
+    if (!nextModel) return;
+
+    this.modelConfigsComponent.setState({ model: nextModel });
   }
 }
